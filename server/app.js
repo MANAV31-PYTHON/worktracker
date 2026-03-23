@@ -11,8 +11,9 @@ import departmentRoutes from "./routes/department.routes.js";
 const app = express();
 
 app.use(cors({
-  origin: ["http://localhost:3000", "http://localhost:5173"],
+  origin: ["http://localhost:3000", "http://localhost:5173",process.env.CLIENT_URL],
   credentials: true,
+  
 }));
 app.use(express.json());
 app.use(helmet());
@@ -24,6 +25,6 @@ app.use("/api/tasks",       taskRoutes);
 app.use("/api/logs",        taskLogRoutes);
 app.use("/api/departments", departmentRoutes);
 
-app.get("/", (req, res) => res.send("WorkTrack API is running..."));
+// app.get("/", (req, res) => res.send("WorkTrack API is running..."));
 
 export default app;
