@@ -194,6 +194,92 @@ a:hover { color: var(--accent-h); }
 ══════════════════════════════════════ */
 .app-layout { display: flex; min-height: 100vh; }
 
+/* ══════════════════════════════════════
+   TASK CARD META (admin/super admin)
+══════════════════════════════════════ */
+.task-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+/* Department chip — uses actual CSS vars from :root */
+.dept-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 99px;
+  border: 1px solid var(--purple-b);
+  background: var(--purple-bg);
+  color: var(--purple);
+  width: fit-content;
+  letter-spacing: 0.2px;
+}
+
+.dept-chip-none {
+  border-color: var(--border2);
+  background: var(--bg4);
+  color: var(--text-4);
+}
+
+/* Assigned to — admin view */
+.task-assigned-to {
+  font-size: 11.5px;
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Assigned by — employee view + super admin view */
+.task-assigned-by {
+  font-size: 11px;
+  color: var(--text-4);
+  padding-top: 5px;
+  border-top: 1px dashed var(--border);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Inside task-card-meta (super admin), assigned-by has no extra border-top */
+.task-card-meta .task-assigned-by {
+  padding-top: 0;
+  border-top: none;
+  color: var(--text-3);
+}
+
+/* ══════════════════════════════════════
+   FILTER SELECT (department dropdown)
+══════════════════════════════════════ */
+.filter-select {
+  padding: 7px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg2);
+  color: var(--text);
+  font-size: 13px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-shadow: var(--sh-xs);
+}
+.filter-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+}
+
+/* ══════════════════════════════════════
+   SIDEBAR
+══════════════════════════════════════ */
 .sidebar {
   width: var(--sidebar-w);
   background: var(--bg2); border-right: 1px solid var(--border);
@@ -514,10 +600,10 @@ a:hover { color: var(--accent-h); }
 .task-card-stripe {
   position: absolute; top: 0; left: 0; right: 0; height: 3px;
 }
-.stripe-pending   { background: var(--amber); }
+.stripe-pending     { background: var(--amber); }
 .stripe-in-progress { background: var(--accent); }
-.stripe-completed { background: var(--green); }
-.stripe-blocked   { background: var(--red); }
+.stripe-completed   { background: var(--green); }
+.stripe-blocked     { background: var(--red); }
 
 .task-card-header { display: flex; align-items: center; justify-content: space-between; }
 .task-card-badges { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
@@ -538,10 +624,6 @@ a:hover { color: var(--accent-h); }
   padding-top: 11px; border-top: 1px solid var(--border);
 }
 .task-meta-pill { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-3); }
-.task-assigned-by {
-  font-size: 11px; color: var(--text-4); padding-top: 5px;
-  border-top: 1px dashed var(--border); display: flex; align-items: center; gap: 4px;
-}
 
 /* ══════════════════════════════════════
    BADGES

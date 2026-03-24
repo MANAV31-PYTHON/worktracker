@@ -31,7 +31,7 @@ export const createDepartment = async (data, currentUser) => {
 
   return await Department.findById(department._id)
     .populate("members", "name email")
-    .populate("createdBy", "name email");
+    .populate("createdBy", "name email role");
 };
 
 /**
@@ -42,7 +42,7 @@ export const getDepartments = async (currentUser) => {
   if (currentUser.role === "SUPER_ADMIN") {
     return await Department.find()
       .populate("members", "name email role")
-      .populate("createdBy", "name email")
+      .populate("createdBy", "name email role")
       .sort({ createdAt: -1 });
   }
 
@@ -51,7 +51,7 @@ export const getDepartments = async (currentUser) => {
   if (currentUser.role === "ADMIN") {
     return await Department.find()
       .populate("members", "name email role")
-      .populate("createdBy", "name email")
+      .populate("createdBy", "name email role")
       .sort({ createdAt: -1 });
   }
 
@@ -64,7 +64,7 @@ export const getDepartments = async (currentUser) => {
 export const getDepartmentById = async (deptId, currentUser) => {
   const dept = await Department.findById(deptId)
     .populate("members", "name email role")
-    .populate("createdBy", "name email");
+    .populate("createdBy", "name email role");
 
   if (!dept) throw new Error("Department not found");
 
@@ -119,7 +119,7 @@ export const updateDepartment = async (deptId, data, currentUser) => {
 
   return await Department.findById(dept._id)
     .populate("members", "name email role")
-    .populate("createdBy", "name email");
+    .populate("createdBy", "name email role");
 };
 
 /**

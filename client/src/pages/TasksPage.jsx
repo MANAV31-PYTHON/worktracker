@@ -3,7 +3,8 @@ import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import socket from "../sockets/socket";
 import { useDialog } from "../components/Dialog";
-import { Plus, ScrollText, Pencil, Trash2, User, Calendar, Info } from "lucide-react";
+import { HiPlus, HiPencil, HiTrash, HiClipboardList } from "react-icons/hi";
+import { HiBuildingOffice2, HiUser, HiShieldCheck, HiCalendarDays } from "react-icons/hi2";
 
 const statusOptions = ["PENDING", "IN_PROGRESS", "COMPLETED", "BLOCKED"];
 const priorityOptions = ["LOW", "MEDIUM", "HIGH"];
@@ -25,11 +26,13 @@ export default function TasksPage() {
   const { user } = useAuth();
   const role = user?.role ?? "";
   const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(role);
+  const isSuperAdmin = role === "SUPER_ADMIN";
   const isEmployee = role === "EMPLOYEE";
   const { confirm } = useDialog();
 
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
@@ -38,6 +41,7 @@ export default function TasksPage() {
   const [logs, setLogs] = useState([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [filter, setFilter] = useState("ALL");
+  const [deptFilter, setDeptFilter] = useState("ALL");
 
   const fetchTasks = useCallback(async () => {
     try {
@@ -52,6 +56,8 @@ export default function TasksPage() {
 
   useEffect(() => {
     fetchTasks();
+    // Departments needed for both filtering and the create modal
+    api.get("/departments").then((res) => setDepartments(res.data)).catch(console.error);
     if (isAdmin) {
       api
         .get("/users")
@@ -60,9 +66,6 @@ export default function TasksPage() {
     }
   }, [fetchTasks, isAdmin]);
 
-  // Refresh cards in real-time on socket events
-  // Note: pass the same function reference to both on() and off()
-  // so we only remove our specific listener, not ones from NotificationContext
   useEffect(() => {
     const onAssigned = () => fetchTasks();
     const onUpdated  = () => fetchTasks();
@@ -115,23 +118,64 @@ export default function TasksPage() {
     }
   };
 
-  // An employee can only edit their own task
   const canEmployeeEdit = (task) =>
     isEmployee && task.assignedTo?._id === user?._id;
 
-  const filtered =
-    filter === "ALL" ? tasks : tasks.filter((t) => t.status === filter);
+  // Helper: find which department an employee belongs to
+  const getDeptForEmployee = (employeeId) => {
+    if (!employeeId) return null;
+    return departments.find((d) =>
+      d.members?.some((m) => (m._id || m) === employeeId)
+    );
+  };
+
+  // Chain status + department filters
+  const filtered = tasks
+    .filter((t) => filter === "ALL" || t.status === filter)
+    .filter((t) => {
+      if (deptFilter === "ALL") return true;
+      const assignedId = t.assignedTo?._id || t.assignedTo;
+      const dept = departments.find((d) => d._id === deptFilter);
+      return dept?.members?.some((m) => (m._id || m) === assignedId);
+    });
 
   return (
     <div className="page">
       <div className="page-header">
         <div>
           <h1>Tasks</h1>
-          <p className="text-muted">{tasks.length} total task{tasks.length !== 1 ? "s" : ""}</p>
+          <p className="text-muted">
+            {tasks.length} total task{tasks.length !== 1 ? "s" : ""}
+          </p>
         </div>
-        {isAdmin && (
-          <button className="btn btn-primary" style={{gap:6}} onClick={() => setShowCreateModal(true)}><Plus size={15} strokeWidth={2.5}/> New Task</button>
-        )}
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {/* Department filter — only meaningful for admins */}
+          {isAdmin && (
+            <select
+              value={deptFilter}
+              onChange={(e) => setDeptFilter(e.target.value)}
+              className="filter-select"
+            >
+              <option value="ALL">All Departments</option>
+              {departments.map((d) => (
+                <option key={d._id} value={d._id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {isAdmin && (
+            <button
+              className="btn btn-primary"
+              style={{ gap: 6 }}
+              onClick={() => setShowCreateModal(true)}
+            >
+              <HiPlus size={16} /> New Task
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="filter-bar">
@@ -162,7 +206,9 @@ export default function TasksPage() {
               key={task._id}
               task={task}
               isAdmin={isAdmin}
+              isSuperAdmin={isSuperAdmin}
               canEdit={isAdmin || canEmployeeEdit(task)}
+              department={isAdmin ? getDeptForEmployee(task.assignedTo?._id || task.assignedTo) : null}
               onUpdate={() => {
                 setSelectedTask(task);
                 setShowUpdateModal(true);
@@ -177,6 +223,7 @@ export default function TasksPage() {
       {showCreateModal && (
         <CreateTaskModal
           employees={employees}
+          departments={departments}
           onClose={() => setShowCreateModal(false)}
           onCreated={fetchTasks}
         />
@@ -186,6 +233,8 @@ export default function TasksPage() {
         <UpdateTaskModal
           task={selectedTask}
           isAdmin={isAdmin}
+          departments={departments}
+          employees={employees}
           onClose={() => {
             setShowUpdateModal(false);
             setSelectedTask(null);
@@ -199,28 +248,38 @@ export default function TasksPage() {
           task={selectedTask}
           logs={logs}
           loading={logsLoading}
-          // Only employees can add log entries — admins view read-only
           canAddLog={isEmployee}
           onClose={() => {
             setShowLogsModal(false);
             setSelectedTask(null);
           }}
-          onLogAdded={() => { openLogs(selectedTask); fetchTasks(); }}
+          onLogAdded={() => {
+            openLogs(selectedTask);
+            fetchTasks();
+          }}
         />
       )}
     </div>
   );
 }
 
-// ─── Task Card ───────────────────────────────────────────────────────────────
-function TaskCard({ task, isAdmin, canEdit, onUpdate, onDelete, onViewLogs }) {
+// ─── Task Card ────────────────────────────────────────────────────────────────
+// • SUPER_ADMIN  → dept chip + assigned to + assigned by
+// • ADMIN        → dept chip + assigned to
+// • EMPLOYEE     → assigned by only
+function TaskCard({ task, isAdmin, isSuperAdmin, canEdit, department, onUpdate, onDelete, onViewLogs }) {
   return (
     <div className="task-card">
-      <div className={`task-card-stripe stripe-${task.status?.toLowerCase().replace(/_/g,"-")}`} />
+      <div
+        className={`task-card-stripe stripe-${task.status
+          ?.toLowerCase()
+          .replace(/_/g, "-")}`}
+      />
+
       <div className="task-card-header">
         <div className="task-card-badges">
           <span className={`badge ${statusColors[task.status]}`}>
-            {task.status?.replace(/_/g," ")}
+            {task.status?.replace(/_/g, " ")}
           </span>
           <span className={`pri ${priorityColors[task.priority]}`}>
             {task.priority}
@@ -228,15 +287,19 @@ function TaskCard({ task, isAdmin, canEdit, onUpdate, onDelete, onViewLogs }) {
         </div>
 
         <div className="task-card-actions">
-          {/* 📜 Logs — everyone can view logs */}
           <button className="icon-btn" title="View Logs" onClick={onViewLogs}>
-            📜
+            <HiClipboardList size={15} />
           </button>
-
-          {/* ✏️ Edit — only admins or the assigned employee */}
-          {canEdit && (<button className="icon-btn" title="Edit" onClick={onUpdate}><Pencil size={13} strokeWidth={2}/></button>)}
-
-          {isAdmin && (<button className="icon-btn danger" title="Delete" onClick={onDelete}><Trash2 size={13} strokeWidth={2}/></button>)}
+          {canEdit && (
+            <button className="icon-btn" title="Edit" onClick={onUpdate}>
+              <HiPencil size={15} />
+            </button>
+          )}
+          {isAdmin && (
+            <button className="icon-btn danger" title="Delete" onClick={onDelete}>
+              <HiTrash size={15} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -265,30 +328,53 @@ function TaskCard({ task, isAdmin, canEdit, onUpdate, onDelete, onViewLogs }) {
       </div>
 
       <div className="task-card-footer">
-        <div className="text-sm text-muted">
-          
-        </div>
-        <div className="text-sm text-muted">
-          📅{" "}
+        <div className="text-sm text-muted" />
+        <div className="text-sm text-muted" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <HiCalendarDays size={13} />
           {task.deadline
             ? new Date(task.deadline).toLocaleDateString()
             : "No deadline"}
         </div>
       </div>
 
-      {/* Show assigner for admin/super admin view */}
-      {task.assignedBy?.name && (
+      {/* ── Admin / Super Admin info ── */}
+      {isAdmin && (
+        <div className="task-card-meta">
+          {/* Department chip */}
+          {department ? (
+            <span className="dept-chip"><HiBuildingOffice2 size={12} /> {department.name}</span>
+          ) : (
+            <span className="dept-chip dept-chip-none"><HiBuildingOffice2 size={12} /> No department</span>
+          )}
+
+          {/* Assigned to */}
+          {task.assignedTo?.name && (
+            <div className="task-assigned-to text-sm text-muted">
+              <HiUser size={13} /> Assigned to: {task.assignedTo.name}
+            </div>
+          )}
+
+          {/* Assigned by — Super Admin only */}
+          {isSuperAdmin && task.assignedBy?.name && (
+            <div className="task-assigned-by text-sm text-muted">
+              <HiShieldCheck size={13} /> Assigned by: {task.assignedBy.name}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Employee info: who assigned the task ── */}
+      {!isAdmin && task.assignedBy?.name && (
         <div className="task-assigned-by text-sm text-muted">
-          Assigned by: {task.assignedBy.name}
+          <HiUser size={13} /> Assigned by: {task.assignedBy.name}
         </div>
       )}
     </div>
   );
 }
 
-// ─── Create Task Modal (Admin / Super Admin only) ─────────────────────────────
-function CreateTaskModal({ employees, onClose, onCreated }) {
-  const [departments, setDepartments] = useState([]);
+// ─── Create Task Modal ────────────────────────────────────────────────────────
+function CreateTaskModal({ employees, departments, onClose, onCreated }) {
   const [selectedDept, setSelectedDept] = useState("");
   const [form, setForm] = useState({
     title: "",
@@ -300,10 +386,6 @@ function CreateTaskModal({ employees, onClose, onCreated }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    api.get("/departments").then((res) => setDepartments(res.data)).catch(console.error);
-  }, []);
-
   // Filter employees by selected department
   const filteredEmployees = selectedDept
     ? employees.filter((e) => {
@@ -314,7 +396,7 @@ function CreateTaskModal({ employees, onClose, onCreated }) {
 
   const handleDeptChange = (deptId) => {
     setSelectedDept(deptId);
-    setForm((prev) => ({ ...prev, assignedTo: "" })); // reset employee when dept changes
+    setForm((prev) => ({ ...prev, assignedTo: "" }));
   };
 
   const handleSubmit = async (e) => {
@@ -364,7 +446,10 @@ function CreateTaskModal({ employees, onClose, onCreated }) {
 
           <div className="form-group">
             <label>Filter by Department</label>
-            <select value={selectedDept} onChange={(e) => handleDeptChange(e.target.value)}>
+            <select
+              value={selectedDept}
+              onChange={(e) => handleDeptChange(e.target.value)}
+            >
               <option value="">All employees</option>
               {departments.map((d) => (
                 <option key={d._id} value={d._id}>
@@ -383,10 +468,8 @@ function CreateTaskModal({ employees, onClose, onCreated }) {
                 required
               >
                 <option value="">
-                  {selectedDept
-                    ? filteredEmployees.length === 0
-                      ? "No employees in this department"
-                      : "Select employee"
+                  {filteredEmployees.length === 0 && selectedDept
+                    ? "No employees in this department"
                     : "Select employee"}
                 </option>
                 {filteredEmployees.map((u) => (
@@ -433,9 +516,15 @@ function CreateTaskModal({ employees, onClose, onCreated }) {
 }
 
 // ─── Update Task Modal ────────────────────────────────────────────────────────
-// Admin sees full form (title, desc, priority, deadline, status, progress)
-// Employee sees only status + progress slider
-function UpdateTaskModal({ task, isAdmin, onClose, onUpdated }) {
+function UpdateTaskModal({ task, isAdmin, departments, employees, onClose, onUpdated }) {
+  const assignedId = task.assignedTo?._id || task.assignedTo || "";
+
+  // Pre-select the dept the current assignee belongs to
+  const currentDept = departments?.find((d) =>
+    d.members?.some((m) => (m._id || m) === assignedId)
+  );
+
+  const [selectedDept, setSelectedDept] = useState(currentDept?._id || "");
   const [form, setForm] = useState({
     title: task.title,
     description: task.description || "",
@@ -443,9 +532,23 @@ function UpdateTaskModal({ task, isAdmin, onClose, onUpdated }) {
     priority: task.priority,
     progress: task.progress,
     deadline: task.deadline ? task.deadline.split("T")[0] : "",
+    assignedTo: assignedId,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Filter employees by selected dept, or show all
+  const filteredEmployees = selectedDept
+    ? (employees || []).filter((e) => {
+        const dept = departments.find((d) => d._id === selectedDept);
+        return dept?.members?.some((m) => (m._id || m) === e._id);
+      })
+    : (employees || []);
+
+  const handleDeptChange = (deptId) => {
+    setSelectedDept(deptId);
+    setForm((prev) => ({ ...prev, assignedTo: "" }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -472,7 +575,6 @@ function UpdateTaskModal({ task, isAdmin, onClose, onUpdated }) {
         <form onSubmit={handleSubmit}>
           {error && <div className="alert alert-error">{error}</div>}
 
-          {/* Admin-only fields */}
           {isAdmin && (
             <>
               <div className="form-group">
@@ -487,9 +589,46 @@ function UpdateTaskModal({ task, isAdmin, onClose, onUpdated }) {
                 <label>Description</label>
                 <textarea
                   value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, description: e.target.value })
+                  }
                   rows={3}
                 />
+              </div>
+
+              <div className="form-group">
+                <label>Department</label>
+                <select
+                  value={selectedDept}
+                  onChange={(e) => handleDeptChange(e.target.value)}
+                >
+                  <option value="">All employees</option>
+                  {departments.map((d) => (
+                    <option key={d._id} value={d._id}>
+                      {d.name} ({d.members?.length || 0} members)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Assigned To</label>
+                <select
+                  value={form.assignedTo}
+                  onChange={(e) => setForm({ ...form, assignedTo: e.target.value })}
+                  required
+                >
+                  <option value="">
+                    {filteredEmployees.length === 0 && selectedDept
+                      ? "No employees in this department"
+                      : "Select employee"}
+                  </option>
+                  {filteredEmployees.map((u) => (
+                    <option key={u._id} value={u._id}>
+                      {u.name} ({u.email})
+                    </option>
+                  ))}
+                </select>
               </div>
             </>
           )}
@@ -507,13 +646,14 @@ function UpdateTaskModal({ task, isAdmin, onClose, onUpdated }) {
               </select>
             </div>
 
-            {/* Priority — admin only */}
             {isAdmin && (
               <div className="form-group">
                 <label>Priority</label>
                 <select
                   value={form.priority}
-                  onChange={(e) => setForm({ ...form, priority: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, priority: e.target.value })
+                  }
                 >
                   {priorityOptions.map((p) => (
                     <option key={p}>{p}</option>
@@ -523,7 +663,6 @@ function UpdateTaskModal({ task, isAdmin, onClose, onUpdated }) {
             )}
           </div>
 
-          {/* Progress slider — employees only. Admins set progress via task edit fields */}
           {!isAdmin && (
             <div className="form-group">
               <label>Progress: {form.progress}%</label>
@@ -532,19 +671,22 @@ function UpdateTaskModal({ task, isAdmin, onClose, onUpdated }) {
                 min={0}
                 max={100}
                 value={form.progress}
-                onChange={(e) => setForm({ ...form, progress: +e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, progress: +e.target.value })
+                }
               />
             </div>
           )}
 
-          {/* Deadline — admin only */}
           {isAdmin && (
             <div className="form-group">
               <label>Deadline</label>
               <input
                 type="date"
                 value={form.deadline}
-                onChange={(e) => setForm({ ...form, deadline: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, deadline: e.target.value })
+                }
               />
             </div>
           )}
@@ -554,7 +696,13 @@ function UpdateTaskModal({ task, isAdmin, onClose, onUpdated }) {
               Cancel
             </button>
             <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? <span className="spinner" /> : isAdmin ? "Save Changes" : "Update Progress"}
+              {loading ? (
+                <span className="spinner" />
+              ) : isAdmin ? (
+                "Save Changes"
+              ) : (
+                "Update Progress"
+              )}
             </button>
           </div>
         </form>
@@ -564,7 +712,6 @@ function UpdateTaskModal({ task, isAdmin, onClose, onUpdated }) {
 }
 
 // ─── Logs Modal ───────────────────────────────────────────────────────────────
-// canAddLog = true only for employees (admins view read-only)
 function LogsModal({ task, logs, loading, canAddLog, onClose, onLogAdded }) {
   const [logForm, setLogForm] = useState({
     message: "",
@@ -579,9 +726,7 @@ function LogsModal({ task, logs, loading, canAddLog, onClose, onLogAdded }) {
     setSubmitting(true);
     try {
       await api.post("/logs", logForm);
-      // Reset message but keep progress/status in sync with what was just submitted
       setLogForm((prev) => ({ ...prev, message: "" }));
-      // Refresh both the logs list AND the task cards so progress bar updates
       onLogAdded();
     } catch (err) {
       alert(err.response?.data?.message || "Error adding log");
@@ -601,14 +746,15 @@ function LogsModal({ task, logs, loading, canAddLog, onClose, onLogAdded }) {
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
-        {/* Add log form — employees only */}
         {canAddLog ? (
           <form onSubmit={handleAddLog} className="log-form">
             <div className="form-group">
               <label>Add Update</label>
               <textarea
                 value={logForm.message}
-                onChange={(e) => setLogForm({ ...logForm, message: e.target.value })}
+                onChange={(e) =>
+                  setLogForm({ ...logForm, message: e.target.value })
+                }
                 placeholder="What did you work on?"
                 rows={2}
                 required
@@ -622,14 +768,18 @@ function LogsModal({ task, logs, loading, canAddLog, onClose, onLogAdded }) {
                   min={0}
                   max={100}
                   value={logForm.progress}
-                  onChange={(e) => setLogForm({ ...logForm, progress: +e.target.value })}
+                  onChange={(e) =>
+                    setLogForm({ ...logForm, progress: +e.target.value })
+                  }
                 />
               </div>
               <div className="form-group">
                 <label>Status</label>
                 <select
                   value={logForm.status}
-                  onChange={(e) => setLogForm({ ...logForm, status: e.target.value })}
+                  onChange={(e) =>
+                    setLogForm({ ...logForm, status: e.target.value })
+                  }
                 >
                   {statusOptions.map((s) => (
                     <option key={s}>{s}</option>
@@ -637,14 +787,18 @@ function LogsModal({ task, logs, loading, canAddLog, onClose, onLogAdded }) {
                 </select>
               </div>
             </div>
-            <button type="submit" className="btn btn-primary" disabled={submitting}>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={submitting}
+            >
               {submitting ? <span className="spinner" /> : "Add Log Entry"}
             </button>
           </form>
         ) : (
-          // Admin / Super Admin read-only notice
           <div className="logs-readonly-notice">
-            📋 Viewing logs as read-only. Only the assigned employee can add log entries.
+            📋 Viewing logs as read-only. Only the assigned employee can add log
+            entries.
           </div>
         )}
 
@@ -661,7 +815,9 @@ function LogsModal({ task, logs, loading, canAddLog, onClose, onLogAdded }) {
             logs.map((log) => (
               <div key={log._id} className="log-entry">
                 <div className="log-meta">
-                  <span className="log-author">👤 {log.userId?.name || "Unknown"}</span>
+                  <span className="log-author" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <HiUser size={13} /> {log.userId?.name || "Unknown"}
+                  </span>
                   <span className="log-time">
                     {new Date(log.createdAt).toLocaleString()}
                   </span>

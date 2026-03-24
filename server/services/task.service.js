@@ -103,13 +103,19 @@ export const updateTask = async (taskId, data, currentUser) => {
     if (data.progress !== undefined) task.progress = data.progress;
     if (data.status)                 task.status   = data.status;
   } else {
-    const { title, description, status, priority, progress, deadline } = data;
+    const { title, description, status, priority, progress, deadline, assignedTo } = data;
     if (title       !== undefined) task.title       = title;
     if (description !== undefined) task.description = description;
     if (status      !== undefined) task.status      = status;
     if (priority    !== undefined) task.priority    = priority;
     if (progress    !== undefined) task.progress    = progress;
     if (deadline    !== undefined) task.deadline    = deadline;
+    if (assignedTo  !== undefined) {
+      const employee = await User.findById(assignedTo);
+      if (!employee || employee.role !== "EMPLOYEE")
+        throw new Error("Invalid employee selected");
+      task.assignedTo = assignedTo;
+    }
   }
 
   await task.save();

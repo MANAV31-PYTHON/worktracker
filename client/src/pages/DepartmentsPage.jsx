@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useDialog } from "../components/Dialog";
+import { HiPlus} from "react-icons/hi";
 import { Building2, Users, Plus, Pencil, Trash2, ChevronDown, ChevronUp, Search, Check } from "lucide-react";
 
 export default function DepartmentsPage() {
@@ -51,7 +52,7 @@ export default function DepartmentsPage() {
           <p className="text-muted">{departments.length} department{departments.length !== 1 ? "s" : ""}</p>
         </div>
         <button className="btn btn-primary" onClick={() => setShowCreateModal(true)}>
-          
+          <HiPlus size={16} /> Create 
         </button>
       </div>
 
@@ -116,7 +117,9 @@ function DeptCard({ dept, onEdit, onDelete }) {
       <div className="dept-meta">
         <span className="dept-count"><Users size={14} strokeWidth={2}/>{dept.members?.length || 0} member{dept.members?.length !== 1 ? "s" : ""}</span>
         <span className="text-muted text-sm">
-          Created by {dept.createdBy?.name || "—"}
+          {dept.createdBy?.role === "SUPER_ADMIN"
+            ? "Created by Super Admin"
+            : `Created by ${dept.createdBy?.name || "—"}`}
         </span>
       </div>
 
