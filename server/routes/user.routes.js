@@ -6,14 +6,16 @@ import {
   updateRole,
   toggleActive,
 } from "../controllers/user.controller.js";
-import { protect, authorizeRoles } from "../middlewares/auth.middleware.js";
+import { protect, authorizeRoles, isRoleChange } from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
+
+router.use(protect,isRoleChange);
+
 
 // Create user (SUPER_ADMIN creates any role; ADMIN creates only EMPLOYEE)
 router.post(
   "/",
-  protect,
   authorizeRoles("SUPER_ADMIN", "ADMIN"),
   create
 );
@@ -21,7 +23,6 @@ router.post(
 // Get all users (scoped by role in service)
 router.get(
   "/",
-  protect,
   authorizeRoles("SUPER_ADMIN", "ADMIN"),
   getAll
 );
@@ -29,7 +30,6 @@ router.get(
 // Update role (SUPER_ADMIN only)
 router.patch(
   "/:id/role",
-  protect,
   authorizeRoles("SUPER_ADMIN"),
   updateRole
 );
@@ -37,15 +37,13 @@ router.patch(
 // Toggle active/inactive (SUPER_ADMIN only)
 router.patch(
   "/:id/toggle-active",
-  protect,
-  authorizeRoles("SUPER_ADMIN"),
+  authorizeRoles("SUPER_ADMIN","ADMIN"),
   toggleActive
 );
 
 // Delete user
 router.delete(
   "/:id",
-  protect,
   authorizeRoles("SUPER_ADMIN", "ADMIN"),
   remove
 );

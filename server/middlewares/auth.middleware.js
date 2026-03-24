@@ -1,4 +1,5 @@
 import jwt from "jsonwebtoken";
+import User from "../models/user.model.js";
 
 export const protect = (req, res, next) => {
   const token = req.headers.authorization?.split(" ")[1];
@@ -9,6 +10,7 @@ export const protect = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
     req.user = decoded;
     next();
   } catch (err) {
@@ -23,4 +25,26 @@ export const authorizeRoles = (...roles) => {
     }
     next();
   };
+};
+
+export const isRoleChange = async (req, res, next) => {
+  try {
+    // req.user already exists from protect middleware
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(401).json({ message: "User not found" });
+    }
+
+    // 🔥 Compare roles
+    if (user.role !== req.user.role) {
+      return res.status(401).json({
+        message: "Role changed! Please login again",
+      });
+    }
+
+    next();
+  } catch (err) {
+    return res.status(401).json({ message: "Something went wrong" });
+  }
 };
