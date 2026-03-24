@@ -116,11 +116,11 @@ function DeptCard({ dept, onEdit, onDelete }) {
 
       <div className="dept-meta">
         <span className="dept-count"><Users size={14} strokeWidth={2}/>{dept.members?.length || 0} member{dept.members?.length !== 1 ? "s" : ""}</span>
-        <span className="text-muted text-sm">
+        {/* <span className="text-muted text-sm">
           {dept.createdBy?.role === "SUPER_ADMIN"
             ? "Created by Super Admin"
             : `Created by ${dept.createdBy?.name || "—"}`}
-        </span>
+        </span> */}
       </div>
 
       {dept.members?.length > 0 && (
