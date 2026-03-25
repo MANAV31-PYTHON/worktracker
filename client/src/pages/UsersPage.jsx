@@ -1,724 +1,768 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import {
+  UserPlus, Pencil, Trash2, ShieldCheck, UserCheck, UserX,
+  Check, Building2, X, Shield, User, Crown,
+  AlertCircle, Loader2, Users, Eye, EyeOff, Calendar,
+} from "lucide-react";
 import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { useDialog } from "../components/Dialog";
-import { UserPlus, Pencil, Trash2, ShieldCheck, UserCheck, UserX, Check, Building2, ChevronDown, X, Shield, User, Crown } from "lucide-react";
 
-/* ─── Injected styles ─────────────────────────────────────────── */
-const STYLES = `
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+/* ═══════════════════════════════════════════════════════════
+   GLOBAL STYLES
+═══════════════════════════════════════════════════════════ */
+const css = `
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
-:root {
-  --bg: #f4f6fb;
-  --surface: #ffffff;
-  --surface2: #f0f2f8;
-  --border: rgba(0,0,0,0.08);
-  --border-active: rgba(0,0,0,0.18);
-  --text: #111827;
-  --text-muted: #6b7280;
-  --text-dim: #9ca3af;
-  --accent: #4f72ff;
-  --accent-soft: rgba(79,114,255,0.1);
-  --accent-glow: rgba(79,114,255,0.25);
-  --green: #16a34a;
-  --green-soft: rgba(22,163,74,0.1);
-  --red: #dc2626;
-  --red-soft: rgba(220,38,38,0.08);
-  --amber: #d97706;
-  --amber-soft: rgba(217,119,6,0.1);
-  --purple: #7c3aed;
-  --purple-soft: rgba(124,58,237,0.1);
-  --radius: 16px;
-  --radius-sm: 10px;
-  --radius-xs: 7px;
-  --shadow: 0 2px 16px rgba(0,0,0,0.07), 0 1px 3px rgba(0,0,0,0.05);
-  --font: 'Sora', sans-serif;
-  --mono: 'DM Mono', monospace;
-  --transition: 0.22s cubic-bezier(0.4,0,0.2,1);
+.up, .up *, .up *::before, .up *::after {
+  box-sizing: border-box; margin: 0; padding: 0;
 }
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* ── Tokens ── */
+.up {
+  --white:         #ffffff;
+  --bg:            #f0f3ff;
+  --surface:       #ffffff;
+  --surface-2:     #f7f9ff;
+  --surface-3:     #edf0fc;
+  --border:        #e2e7f6;
+  --border-2:      #ccd3ed;
 
-.up-root {
-  font-family: var(--font);
+  --ink-900:       #0e1630;
+  --ink-700:       #354068;
+  --ink-500:       #6672a0;
+  --ink-300:       #a6aecb;
+  --ink-100:       #dde3f5;
+
+  --blue:          #4361ee;
+  --blue-hover:    #2d4ad4;
+  --blue-bg:       #eaedff;
+  --blue-border:   #c5ccf8;
+
+  --green:         #15803d;
+  --green-bg:      #dcfce7;
+  --green-border:  #bbf7d0;
+
+  --red:           #b91c1c;
+  --red-bg:        #fee2e2;
+  --red-border:    #fecaca;
+
+  --amber:         #92400e;
+  --amber-bg:      #fef3c7;
+  --amber-border:  #fde68a;
+
+  --violet:        #6d28d9;
+  --violet-bg:     #ede9fe;
+  --violet-border: #c4b5fd;
+
+  --r-xs:   6px;
+  --r-sm:   10px;
+  --r-md:   14px;
+  --r-lg:   18px;
+  --r-xl:   22px;
+
+  --sh-xs:  0 1px 2px rgba(14,22,48,0.05);
+  --sh-sm:  0 1px 3px rgba(14,22,48,0.06), 0 2px 8px rgba(14,22,48,0.04);
+  --sh-md:  0 4px 16px rgba(14,22,48,0.09), 0 1px 4px rgba(14,22,48,0.05);
+  --sh-lg:  0 8px 32px rgba(14,22,48,0.13), 0 2px 8px rgba(14,22,48,0.06);
+
+  --ease:   cubic-bezier(0.4,0,0.2,1);
+  --spring: cubic-bezier(0.34,1.56,0.64,1);
+  --dur:    0.18s;
+
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  color: var(--ink-900);
   background: var(--bg);
-  color: var(--text);
   min-height: 100vh;
-  padding: 0;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Page shell ── */
+/* ── Page ── */
 .up-page {
-  max-width: 1100px;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 24px 16px 80px;
-  animation: up-fade-in 0.4s ease both;
+  padding: 28px 16px 96px;
 }
-@keyframes up-fade-in { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+@media (min-width: 640px)  { .up-page { padding: 32px 24px 96px; } }
+@media (min-width: 1024px) { .up-page { padding: 40px 32px 96px; } }
 
-/* ── Header ── */
+/* ── Page Header ── */
 .up-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   margin-bottom: 24px;
   flex-wrap: wrap;
 }
-.up-header-left h1 {
-  font-size: clamp(22px,5vw,30px);
-  font-weight: 700;
-  letter-spacing: -0.5px;
-  line-height: 1.1;
+.up-header-meta { display: flex; align-items: center; gap: 8px; margin-top: 7px; flex-wrap: wrap; }
+.up-title { font-size: clamp(22px, 4vw, 30px); font-weight: 800; letter-spacing: -0.6px; color: var(--ink-900); }
+.up-live { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex-shrink: 0; animation: upPulse 2.4s ease infinite; }
+@keyframes upPulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(21,128,61,0.35); }
+  50%      { box-shadow: 0 0 0 5px rgba(21,128,61,0); }
 }
-.up-subtitle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 4px;
-  font-size: 13px;
-  color: var(--text-muted);
-  font-family: var(--mono);
-}
-.up-dot {
-  width: 7px; height: 7px;
-  border-radius: 50%;
-  background: var(--green);
-  box-shadow: 0 0 8px var(--green);
-  animation: up-pulse 2s ease infinite;
-}
-@keyframes up-pulse {
-  0%,100% { box-shadow: 0 0 5px var(--green); }
-  50% { box-shadow: 0 0 14px var(--green); }
+.up-count {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--blue-bg); color: var(--blue);
+  font-size: 12px; font-weight: 600;
+  padding: 3px 10px; border-radius: 20px;
+  font-family: 'JetBrains Mono', monospace;
+  border: 1px solid var(--blue-border);
 }
 
 /* ── Buttons ── */
 .up-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font);
-  font-size: 13px;
-  font-weight: 600;
-  border: none;
-  cursor: pointer;
-  border-radius: var(--radius-xs);
-  padding: 10px 16px;
-  transition: var(--transition);
-  white-space: nowrap;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 600; font-size: 14px; line-height: 1;
+  border: none; cursor: pointer;
+  border-radius: var(--r-sm);
+  padding: 10px 18px;
+  transition: background var(--dur) var(--ease),
+              box-shadow var(--dur) var(--ease),
+              transform var(--dur) var(--ease),
+              border-color var(--dur) var(--ease),
+              color var(--dur) var(--ease);
+  white-space: nowrap; flex-shrink: 0;
+  text-decoration: none;
 }
+.up-btn:disabled { opacity: 0.55; pointer-events: none; }
+.up-btn:active   { transform: scale(0.97); }
+
 .up-btn-primary {
-  background: var(--accent);
-  color: #fff;
-  box-shadow: 0 0 0 rgba(108,143,255,0);
+  background: var(--blue); color: #fff;
+  box-shadow: 0 2px 10px rgba(67,97,238,0.28);
 }
 .up-btn-primary:hover {
-  background: #809fff;
-  box-shadow: 0 4px 20px var(--accent-glow);
+  background: var(--blue-hover);
+  box-shadow: 0 4px 18px rgba(67,97,238,0.38);
   transform: translateY(-1px);
 }
-.up-btn-primary:active { transform: translateY(0); }
 .up-btn-ghost {
-  background: var(--surface2);
-  color: var(--text-muted);
-  border: 1px solid var(--border);
+  background: var(--surface); color: var(--ink-700);
+  border: 1.5px solid var(--border-2);
+  box-shadow: var(--sh-xs);
 }
-.up-btn-ghost:hover { background: var(--border); color: var(--text); }
-.up-btn-danger { background: var(--red-soft); color: var(--red); border: 1px solid rgba(255,107,122,0.25); }
-.up-btn-danger:hover { background: rgba(255,107,122,0.22); }
-.up-btn-activate { background: var(--green-soft); color: var(--green); border: 1px solid rgba(61,214,140,0.25); }
-.up-btn-activate:hover { background: rgba(61,214,140,0.22); }
-.up-btn-deactivate { background: var(--amber-soft); color: var(--amber); border: 1px solid rgba(255,181,71,0.25); }
-.up-btn-deactivate:hover { background: rgba(255,181,71,0.22); }
-.up-btn-sm { padding: 6px 12px; font-size: 12px; }
-.up-btn-xs { padding: 5px 10px; font-size: 11px; border-radius: 6px; }
-.up-btn:disabled { opacity: 0.5; pointer-events: none; }
+.up-btn-ghost:hover { background: var(--surface-2); }
+
+.up-btn-danger  { background: var(--red-bg);   color: var(--red);   border: 1.5px solid var(--red-border); }
+.up-btn-danger:hover  { background: #fecaca; }
+.up-btn-success { background: var(--green-bg); color: var(--green); border: 1.5px solid var(--green-border); }
+.up-btn-success:hover { background: #bbf7d0; }
+.up-btn-warn    { background: var(--amber-bg); color: var(--amber); border: 1.5px solid var(--amber-border); }
+.up-btn-warn:hover    { background: #fde68a; }
+
+.up-btn-sm  { padding: 7px 13px; font-size: 13px; border-radius: var(--r-xs); }
+.up-btn-xs  { padding: 5px 10px; font-size: 12px; border-radius: var(--r-xs); }
+
+.up-icon-btn {
+  width: 32px; height: 32px; padding: 0;
+  background: transparent; color: var(--ink-300);
+  border: 1.5px solid transparent;
+  border-radius: var(--r-xs);
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0;
+  font-family: inherit;
+  transition: all var(--dur) var(--ease);
+}
+.up-icon-btn:hover {
+  background: var(--blue-bg); color: var(--blue);
+  border-color: var(--blue-border);
+}
 
 /* ── Alert ── */
 .up-alert {
-  display: flex; align-items: center; gap: 8px;
-  padding: 12px 16px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-  margin-bottom: 16px;
-  background: var(--red-soft);
-  color: var(--red);
-  border: 1px solid rgba(255,107,122,0.25);
-  animation: up-fade-in 0.3s ease both;
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 12px 16px; border-radius: var(--r-sm);
+  font-size: 13.5px; font-weight: 500; margin-bottom: 20px;
+  background: var(--red-bg); color: var(--red);
+  border: 1.5px solid var(--red-border);
+  animation: upFadeUp 0.25s var(--ease);
 }
+.up-alert svg { flex-shrink: 0; margin-top: 1px; }
 
 /* ── Loading ── */
-.up-loading { display: flex; justify-content: center; align-items: center; height: 200px; }
-.up-spinner {
-  width: 28px; height: 28px;
-  border: 2.5px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: up-spin 0.75s linear infinite;
+.up-spin { animation: upSpin 0.75s linear infinite; }
+@keyframes upSpin { to { transform: rotate(360deg); } }
+.up-loading-state {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 14px; padding: 72px 24px;
+  color: var(--ink-500); font-size: 14px; font-weight: 500;
 }
-.up-spinner-sm { width: 14px; height: 14px; border-width: 2px; }
-@keyframes up-spin { to { transform: rotate(360deg); } }
 
-/* ── Desktop table ── */
-.up-table-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-  box-shadow: var(--shadow);
+/* ── Empty ── */
+.up-empty {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 10px; padding: 64px 24px; text-align: center;
 }
+.up-empty-ico {
+  width: 64px; height: 64px; border-radius: var(--r-lg);
+  background: var(--blue-bg); color: var(--blue);
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 6px; border: 1.5px solid var(--blue-border);
+}
+.up-empty h3 { font-size: 17px; font-weight: 700; color: var(--ink-700); }
+.up-empty p  { font-size: 14px; color: var(--ink-500); max-width: 260px; line-height: 1.55; }
+
+/* ── Card shell ── */
+.up-card {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-xl);
+  box-shadow: var(--sh-sm);
+  overflow: hidden;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   DESKTOP TABLE  (≥ 768px)
+═══════════════════════════════════════════════════════════ */
 .up-table { width: 100%; border-collapse: collapse; }
+.up-table thead tr {
+  background: var(--surface-2);
+  border-bottom: 1.5px solid var(--border);
+}
 .up-table th {
-  padding: 13px 16px;
-  text-align: left;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-dim);
-  background: var(--surface2);
-  border-bottom: 1px solid var(--border);
-  font-family: var(--mono);
+  padding: 11px 16px;
+  text-align: left; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--ink-300);
+  font-family: 'JetBrains Mono', monospace;
 }
 .up-table td {
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
-  font-size: 13.5px;
   vertical-align: middle;
+  font-size: 13.5px;
 }
-.up-table tbody tr {
-  transition: background var(--transition);
-  animation: up-row-in 0.35s ease both;
-}
-.up-table tbody tr:hover { background: rgba(255,255,255,0.025); }
+.up-table tbody tr { transition: background var(--dur) var(--ease); }
+.up-table tbody tr:hover { background: var(--surface-2); }
 .up-table tbody tr:last-child td { border-bottom: none; }
-@keyframes up-row-in { from { opacity:0; transform:translateX(-6px); } to { opacity:1; transform:none; } }
+.up-table tbody tr { animation: upRowIn 0.3s var(--ease) both; }
+@keyframes upRowIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
 
-/* ── User cell ── */
-.up-user-cell { display: flex; align-items: center; gap: 10px; }
-.up-avatar {
-  width: 36px; height: 36px;
-  border-radius: 10px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 700;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--accent-glow);
-  flex-shrink: 0;
+/* user cell */
+.up-user-cell  { display: flex; align-items: center; gap: 11px; }
+.up-user-name  { font-size: 14px; font-weight: 700; color: var(--ink-900); line-height: 1.2; }
+.up-user-email { font-size: 12px; color: var(--ink-500); margin-top: 2px; }
+
+/* avatar */
+.up-av {
+  width: 38px; height: 38px; border-radius: var(--r-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 800; flex-shrink: 0;
+  border: 1.5px solid transparent;
 }
-.up-avatar-lg { width: 48px; height: 48px; font-size: 18px; border-radius: 14px; }
-.up-user-name { font-weight: 600; font-size: 14px; }
-.up-text-muted { color: var(--text-muted); font-size: 13px; }
-.up-text-dim { color: var(--text-dim); }
-.up-text-sm { font-size: 12px; }
+.up-av-lg { width: 48px; height: 48px; font-size: 18px; border-radius: var(--r-md); }
+.up-av-blue   { background: var(--blue-bg);   color: var(--blue);   border-color: var(--blue-border); }
+.up-av-green  { background: var(--green-bg);  color: var(--green);  border-color: var(--green-border); }
+.up-av-violet { background: var(--violet-bg); color: var(--violet); border-color: var(--violet-border); }
+.up-av-amber  { background: var(--amber-bg);  color: var(--amber);  border-color: var(--amber-border); }
 
-/* ── Badges ── */
+/* badge */
 .up-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 9px;
-  border-radius: 20px;
-  font-size: 11px;
-  font-weight: 600;
-  font-family: var(--mono);
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-}
-.up-badge-active { background: var(--green-soft); color: var(--green); }
-.up-badge-inactive { background: var(--red-soft); color: var(--red); }
-.up-badge-super { background: var(--red-soft); color: var(--red); }
-.up-badge-admin { background: var(--amber-soft); color: var(--amber); }
-.up-badge-employee { background: var(--green-soft); color: var(--green); }
-
-/* ── Role cell ── */
-.up-role-cell { display: flex; align-items: center; gap: 6px; }
-.up-icon-btn {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: var(--text-dim);
-  padding: 4px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  transition: var(--transition);
-}
-.up-icon-btn:hover { color: var(--accent); background: var(--accent-soft); }
-
-/* ── Dept tags ── */
-.up-dept-tags { display: flex; flex-wrap: wrap; gap: 4px; }
-.up-dept-tag {
   display: inline-flex; align-items: center; gap: 4px;
-  padding: 2px 8px;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 11px;
-  color: var(--text-muted);
+  padding: 3px 9px; border-radius: 20px;
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  font-family: 'JetBrains Mono', monospace;
+  border: 1.5px solid transparent; white-space: nowrap;
+}
+.up-badge-active   { background: var(--green-bg);  color: var(--green);  border-color: var(--green-border); }
+.up-badge-inactive { background: var(--red-bg);    color: var(--red);    border-color: var(--red-border); }
+.up-badge-employee { background: var(--green-bg);  color: var(--green);  border-color: var(--green-border); }
+.up-badge-admin    { background: var(--amber-bg);  color: var(--amber);  border-color: var(--amber-border); }
+.up-badge-super    { background: var(--violet-bg); color: var(--violet); border-color: var(--violet-border); }
+
+/* role wrap */
+.up-role-cell { display: flex; align-items: center; gap: 7px; }
+
+/* dept chip */
+.up-dept-list { display: flex; flex-wrap: wrap; gap: 5px; }
+.up-dept-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 9px; border-radius: 6px; font-size: 12px; font-weight: 500;
+  background: var(--blue-bg); color: var(--blue);
+  border: 1px solid var(--blue-border);
+  white-space: nowrap;
 }
 
-/* ── Action cell ── */
-.up-action-cell { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+/* action cell */
+.up-action-cell { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
 
-/* ── Empty ── */
-.up-empty {
-  text-align: center;
-  padding: 60px 20px;
-  color: var(--text-dim);
-}
-.up-empty-icon { font-size: 40px; margin-bottom: 12px; }
-.up-empty-text { font-size: 14px; }
+/* dim text */
+.up-dim  { color: var(--ink-300); font-size: 12px; }
+.up-muted{ color: var(--ink-500); }
 
-/* ── MOBILE CARDS (≤ 768px) ── */
-.up-cards-list { display: flex; flex-direction: column; gap: 12px; }
+/* ═══════════════════════════════════════════════════════════
+   MOBILE CARDS  (< 768px)
+═══════════════════════════════════════════════════════════ */
+.up-cards { display: flex; flex-direction: column; gap: 12px; }
 
-.up-user-card {
+.up-ucard {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-lg);
   padding: 16px;
-  box-shadow: var(--shadow);
-  animation: up-card-in 0.35s ease both;
-  transition: transform var(--transition), box-shadow var(--transition);
-  position: relative;
-  overflow: hidden;
+  box-shadow: var(--sh-sm);
+  animation: upFadeUp 0.35s var(--ease) both;
+  transition: box-shadow var(--dur) var(--ease);
+  position: relative; overflow: hidden;
 }
-.up-user-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, var(--accent), var(--purple));
-  opacity: 0;
-  transition: opacity var(--transition);
+.up-ucard::before {
+  content: ''; position: absolute;
+  left: 0; top: 0; bottom: 0; width: 3.5px;
+  background: linear-gradient(180deg, var(--blue) 0%, var(--violet) 100%);
+  opacity: 0; transition: opacity var(--dur) var(--ease);
 }
-.up-user-card:active::before { opacity: 1; }
-@keyframes up-card-in {
-  from { opacity:0; transform:translateY(14px) scale(0.98); }
-  to { opacity:1; transform:none; }
+.up-ucard:hover { box-shadow: var(--sh-md); }
+.up-ucard:hover::before { opacity: 1; }
+
+@keyframes upFadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
+
+.up-ucard-top {
+  display: flex; align-items: flex-start;
+  justify-content: space-between; gap: 10px;
+}
+.up-ucard-identity { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+.up-ucard-text { min-width: 0; }
+.up-ucard-name  { font-size: 15px; font-weight: 700; color: var(--ink-900); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.up-ucard-email { font-size: 12.5px; color: var(--ink-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.up-ucard-badges{ display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex-shrink: 0; }
+
+.up-ucard-divider { height: 1px; background: var(--border); margin: 12px 0; }
+
+.up-ucard-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+}
+.up-ucard-field-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.09em; color: var(--ink-300);
+  font-family: 'JetBrains Mono', monospace;
+  margin-bottom: 4px;
+}
+.up-ucard-field-val {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px;
+  font-size: 13px; font-weight: 500; color: var(--ink-700);
 }
 
-.up-card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-.up-card-user { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
-.up-card-info { min-width: 0; }
-.up-card-name { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.up-card-email { font-size: 12px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
-.up-card-badges { display: flex; gap: 5px; flex-wrap: wrap; }
+.up-ucard-footer { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+.up-ucard-footer .up-btn { flex: 1; min-width: 0; justify-content: center; }
 
-.up-card-meta {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  padding: 12px 0;
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 12px;
-}
-.up-card-meta-item label {
-  display: block;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-dim);
-  font-family: var(--mono);
-  margin-bottom: 3px;
-}
-.up-card-meta-item .value { font-size: 13px; color: var(--text-muted); }
-
-.up-card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.up-card-actions .up-btn { flex: 1; justify-content: center; min-width: 0; }
-
-/* ── Responsive toggle ── */
-.up-table-wrap { display: none; }
-.up-mobile-list { display: block; }
-
-@media (min-width: 769px) {
-  .up-table-wrap { display: block; }
-  .up-mobile-list { display: none; }
-  .up-page { padding: 32px 24px 60px; }
+/* ── Responsive switch ── */
+.up-desktop-only { display: none; }
+.up-mobile-only  { display: block; }
+@media (min-width: 768px) {
+  .up-desktop-only { display: block; }
+  .up-mobile-only  { display: none;  }
 }
 
-/* ─── MODAL ─────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════
+   MODAL
+═══════════════════════════════════════════════════════════ */
 .up-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(17,24,39,0.45);
+  position: fixed; inset: 0; z-index: 9999;
+  display: flex; align-items: flex-end; justify-content: center;
+  background: rgba(14,22,48,0.38);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  z-index: 1000;
   padding: 0;
-  animation: up-overlay-in 0.25s ease both;
+  animation: upOverlayIn 0.22s var(--ease);
 }
-@keyframes up-overlay-in { from { opacity:0; } to { opacity:1; } }
-
-@media (min-width: 600px) {
-  .up-overlay { align-items: center; padding: 24px; }
-}
+@keyframes upOverlayIn { from { opacity:0; } to { opacity:1; } }
+@media (min-width: 600px) { .up-overlay { align-items: center; padding: 24px; } }
 
 .up-modal {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius) var(--radius) 0 0;
-  width: 100%;
-  max-height: 95vh;
-  overflow-y: auto;
-  box-shadow: 0 -4px 40px rgba(0,0,0,0.12);
-  animation: up-modal-up 0.32s cubic-bezier(0.34,1.56,0.64,1) both;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  width: 100%; max-height: 93vh;
+  overflow-y: auto; overscroll-behavior: contain;
+  box-shadow: var(--sh-lg);
+  animation: upSlideUp 0.3s var(--spring);
 }
-@keyframes up-modal-up {
-  from { transform: translateY(100%); opacity:0; }
-  to { transform: none; opacity:1; }
+.up-modal::-webkit-scrollbar { width: 4px; }
+.up-modal::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 4px; }
+.up-modal-handle {
+  display: block; width: 40px; height: 4px;
+  background: var(--ink-100); border-radius: 4px;
+  margin: 14px auto 0;
 }
 
 @media (min-width: 600px) {
   .up-modal {
-    border-radius: var(--radius);
-    max-width: 520px;
-    animation: up-modal-scale 0.28s cubic-bezier(0.34,1.56,0.64,1) both;
+    border-radius: var(--r-xl);
+    max-width: 480px;
+    animation: upScaleIn 0.28s var(--spring);
   }
-  .up-modal-lg { max-width: 580px; }
+  .up-modal-lg { max-width: 530px; }
+  .up-modal-handle { display: none; }
 }
-@keyframes up-modal-scale {
-  from { transform: scale(0.92); opacity:0; }
-  to { transform: none; opacity:1; }
-}
+@keyframes upSlideUp { from { transform:translateY(100%); opacity:.6; } to { transform:none; opacity:1; } }
+@keyframes upScaleIn { from { transform:scale(0.92) translateY(8px); opacity:0; } to { transform:none; opacity:1; } }
 
-/* drag handle on mobile */
-.up-modal::before {
-  content: '';
-  display: block;
-  width: 40px;
-  height: 4px;
-  background: var(--border-active);
-  border-radius: 4px;
-  margin: 12px auto 0;
-}
-@media (min-width: 600px) { .up-modal::before { display: none; } }
-
-.up-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 20px 0;
-}
-.up-modal-header h2 { font-size: 18px; font-weight: 700; }
-.up-modal-close {
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  width: 32px; height: 32px;
-  border-radius: 8px;
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: var(--transition);
-  flex-shrink: 0;
-}
-.up-modal-close:hover { color: var(--text); background: var(--border); }
-
-.up-modal-body { padding: 20px; }
-
-/* ── Form ── */
-.up-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-@media (max-width: 480px) { .up-form-row { grid-template-columns: 1fr; } }
-
-.up-form-group { margin-bottom: 14px; }
-.up-form-group label {
-  display: block;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--text-muted);
-  margin-bottom: 6px;
-  font-family: var(--mono);
-}
-.up-form-group input, .up-form-group select {
-  width: 100%;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xs);
-  color: var(--text);
-  font-family: var(--font);
-  font-size: 14px;
-  padding: 11px 14px;
-  outline: none;
-  transition: border-color var(--transition), box-shadow var(--transition);
-  appearance: none;
-  -webkit-appearance: none;
-}
-.up-form-group input:focus, .up-form-group select:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
-.up-form-group input::placeholder { color: var(--text-dim); }
-.up-label-opt { font-weight: 400; color: var(--text-dim); font-size: 10px; text-transform: none; letter-spacing: 0; margin-left: 4px; }
-
-.up-dept-hint {
-  font-size: 12px;
-  color: var(--green);
-  margin-top: 6px;
-  display: flex; align-items: center; gap: 4px;
-}
-
-/* Inline create dept */
-.up-inline-dept {
-  margin-top: 10px;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 14px;
-  animation: up-fade-in 0.2s ease both;
-}
-.up-inline-dept-header {
+.up-modal-head {
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 12px;
+  padding: 20px 22px 0;
 }
-.up-inline-dept-header p { font-size: 13px; font-weight: 600; }
+.up-modal-title { font-size: 18px; font-weight: 800; letter-spacing: -0.3px; color: var(--ink-900); }
 
-.up-modal-footer {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  padding: 16px 20px;
-  border-top: 1px solid var(--border);
-  background: #f8f9fc;
+.up-modal-x {
+  width: 32px; height: 32px; border-radius: var(--r-xs);
+  background: var(--surface-2); border: 1.5px solid var(--border);
+  color: var(--ink-500); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--dur) var(--ease); flex-shrink: 0;
+  font-family: inherit;
 }
-@media (max-width: 480px) {
-  .up-modal-footer { flex-direction: column-reverse; }
-  .up-modal-footer .up-btn { width: 100%; justify-content: center; padding: 13px; }
+.up-modal-x:hover { background: var(--red-bg); color: var(--red); border-color: var(--red-border); }
+
+.up-modal-body { padding: 20px 22px; }
+
+.up-modal-foot {
+  display: flex; gap: 10px; justify-content: flex-end;
+  padding: 16px 22px; border-top: 1.5px solid var(--border);
+  background: var(--surface-2);
+  border-radius: 0 0 var(--r-xl) var(--r-xl);
+}
+@media (max-width: 599px) {
+  .up-modal-foot {
+    flex-direction: column-reverse; border-radius: 0;
+  }
+  .up-modal-foot .up-btn { width: 100%; padding: 13px; font-size: 15px; }
 }
 
-/* ── Role selector ── */
-.up-role-user-hint {
-  padding: 12px 16px;
-  font-size: 14px;
-  color: var(--text-muted);
-  background: var(--surface2);
-  border-radius: var(--radius-sm);
+/* ── Form Fields ── */
+.up-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 0; }
+@media (max-width: 520px) { .up-form-row { grid-template-columns: 1fr; } }
+
+.up-field { margin-bottom: 16px; }
+.up-field:last-child { margin-bottom: 0; }
+
+.up-label {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 11.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.07em; color: var(--ink-500);
+  font-family: 'JetBrains Mono', monospace;
+  margin-bottom: 7px;
+}
+.up-label-opt {
+  font-size: 11px; text-transform: none; letter-spacing: 0;
+  font-weight: 500; color: var(--ink-300); font-family: 'Plus Jakarta Sans', sans-serif;
+}
+.up-input {
+  width: 100%; padding: 11px 14px;
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: var(--r-sm); color: var(--ink-900);
+  font-family: 'Plus Jakarta Sans', sans-serif; font-size: 14px; font-weight: 500;
+  outline: none;
+  transition: border-color var(--dur), box-shadow var(--dur);
+  -webkit-appearance: none; appearance: none;
+}
+.up-input:hover:not(:focus) { border-color: var(--border-2); }
+.up-input:focus { border-color: var(--blue); box-shadow: 0 0 0 3.5px rgba(67,97,238,0.11); }
+.up-input::placeholder { color: var(--ink-300); font-weight: 400; }
+
+.up-input-wrap { position: relative; }
+.up-input-wrap .up-input { padding-right: 42px; }
+.up-input-btn {
+  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+  background: none; border: none; cursor: pointer;
+  color: var(--ink-300); padding: 5px;
+  display: flex; align-items: center;
+  border-radius: 5px;
+  transition: color var(--dur);
+  font-family: inherit;
+}
+.up-input-btn:hover { color: var(--ink-700); }
+
+/* ── Inline dept ── */
+.up-inline-dept {
+  margin-top: 10px; padding: 16px;
+  background: var(--surface-2); border: 1.5px solid var(--border);
+  border-radius: var(--r-md);
+  animation: upFadeUp 0.2s var(--ease);
+}
+.up-inline-dept-head {
+  display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 14px;
 }
-.up-role-user-hint strong { color: var(--text); }
+.up-inline-dept-head p { font-size: 13px; font-weight: 700; color: var(--ink-700); }
+.up-dept-ok { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 13px; color: var(--green); font-weight: 600; }
 
-.up-role-options { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
-.up-role-option {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  background: var(--surface2);
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: var(--transition);
+/* ── Role selector ── */
+.up-role-who {
+  display: flex; align-items: center; gap: 11px;
+  padding: 12px 14px;
+  background: var(--surface-2); border: 1.5px solid var(--border);
+  border-radius: var(--r-sm); margin-bottom: 16px;
+  font-size: 14px; color: var(--ink-700);
 }
-.up-role-option:hover { border-color: var(--border-active); background: rgba(255,255,255,0.04); }
-.up-role-option.selected { border-color: var(--accent); background: var(--accent-soft); }
-.up-role-option input[type="radio"] { display: none; }
-.up-role-option-icon {
-  width: 36px; height: 36px;
-  border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-}
-.up-role-icon-employee { background: var(--green-soft); color: var(--green); }
-.up-role-icon-admin { background: var(--amber-soft); color: var(--amber); }
-.up-role-icon-super { background: var(--red-soft); color: var(--red); }
+.up-role-who strong { color: var(--ink-900); font-weight: 700; }
 
-.up-role-option-text { flex: 1; min-width: 0; }
-.up-role-option-label { font-weight: 600; font-size: 14px; display: block; }
-.up-role-option-desc { font-size: 12px; color: var(--text-muted); margin-top: 2px; display: block; }
-.up-role-check {
-  width: 20px; height: 20px;
-  border: 1.5px solid var(--border-active);
-  border-radius: 50%;
+.up-role-opts { display: flex; flex-direction: column; gap: 8px; }
+.up-role-opt {
+  display: flex; align-items: center; gap: 13px;
+  padding: 14px 16px; border-radius: var(--r-md);
+  background: var(--surface); border: 1.5px solid var(--border);
+  cursor: pointer; transition: all var(--dur) var(--ease);
+  user-select: none;
+}
+.up-role-opt:hover { border-color: var(--border-2); background: var(--surface-2); }
+.up-role-opt.active { border-color: var(--blue); background: var(--blue-bg); }
+.up-role-opt input[type="radio"] { display: none; }
+
+.up-role-ico {
+  width: 40px; height: 40px; border-radius: var(--r-sm);
   display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-  transition: var(--transition);
+  flex-shrink: 0; border: 1.5px solid transparent;
 }
-.selected .up-role-check {
-  background: var(--accent);
-  border-color: var(--accent);
+.up-role-ico-emp  { background: var(--green-bg);  color: var(--green);  border-color: var(--green-border); }
+.up-role-ico-adm  { background: var(--amber-bg);  color: var(--amber);  border-color: var(--amber-border); }
+.up-role-ico-sup  { background: var(--violet-bg); color: var(--violet); border-color: var(--violet-border); }
+
+.up-role-txt { flex: 1; min-width: 0; }
+.up-role-name { font-size: 14px; font-weight: 700; color: var(--ink-900); display: block; }
+.up-role-desc { font-size: 12.5px; color: var(--ink-500); margin-top: 2px; display: block; line-height: 1.4; }
+
+.up-radio {
+  width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid var(--border-2); background: var(--surface);
+  display: flex; align-items: center; justify-content: center;
+  transition: all var(--dur) var(--ease);
 }
+.up-role-opt.active .up-radio { background: var(--blue); border-color: var(--blue); }
 `;
 
-const roleColors = {
-  SUPER_ADMIN: "up-badge-super",
-  ADMIN: "up-badge-admin",
-  EMPLOYEE: "up-badge-employee",
-};
+/* ═══════════════════════════════════════════════════════════
+   CONSTANTS & HELPERS
+═══════════════════════════════════════════════════════════ */
 const ALL_ROLES = ["EMPLOYEE", "ADMIN", "SUPER_ADMIN"];
 
-const roleIcons = {
-  EMPLOYEE: <User size={16} />,
-  ADMIN: <Shield size={16} />,
-  SUPER_ADMIN: <Crown size={16} />,
+const AV_COLORS = ["up-av-blue", "up-av-green", "up-av-violet", "up-av-amber"];
+const avColor = (name = "") => AV_COLORS[(name.charCodeAt(0) || 0) % AV_COLORS.length];
+
+const ROLE_CFG = {
+  EMPLOYEE:    { label: "Employee",    badge: "up-badge-employee", Icon: User,   icoCls: "up-role-ico-emp",  desc: "Can view & update their own tasks" },
+  ADMIN:       { label: "Admin",       badge: "up-badge-admin",    Icon: Shield, icoCls: "up-role-ico-adm",  desc: "Creates tasks, manages employees" },
+  SUPER_ADMIN: { label: "Super Admin", badge: "up-badge-super",    Icon: Crown,  icoCls: "up-role-ico-sup",  desc: "Full access — all users & settings" },
 };
 
+/* ── Reusable atoms ── */
+function Avatar({ name, lg = false }) {
+  return (
+    <div className={`up-av ${avColor(name)} ${lg ? "up-av-lg" : ""}`}>
+      {name?.charAt(0)?.toUpperCase() ?? "?"}
+    </div>
+  );
+}
+
+function RoleBadge({ role }) {
+  const cfg = ROLE_CFG[role] ?? ROLE_CFG.EMPLOYEE;
+  return <span className={`up-badge ${cfg.badge}`}>{cfg.label}</span>;
+}
+
+function StatusBadge({ active }) {
+  return (
+    <span className={`up-badge ${active ? "up-badge-active" : "up-badge-inactive"}`}>
+      {active ? "Active" : "Inactive"}
+    </span>
+  );
+}
+
+function Spinner({ size = 18 }) {
+  return <Loader2 size={size} className="up-spin" />;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MAIN PAGE COMPONENT
+═══════════════════════════════════════════════════════════ */
 export default function UsersPage() {
-  const { user } = useAuth();
+  const { user }    = useAuth();
   const { confirm } = useDialog();
-  const isSuperAdmin = user?.role === "SUPER_ADMIN";
+  const isSA = user?.role === "SUPER_ADMIN";
 
-  const [users, setUsers] = useState([]);
-  const [departments, setDepartments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [roleModal, setRoleModal] = useState(null);
-  const [error, setError] = useState("");
+  const [users,       setUsers]       = useState([]);
+  const [departments, setDepts]       = useState([]);
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState("");
+  const [showCreate,  setShowCreate]  = useState(false);
+  const [roleModal,   setRoleModal]   = useState(null);
 
-  const fetchAll = async () => {
+  const fetchAll = useCallback(async () => {
+    setError("");
     try {
-      const [usersRes, deptsRes] = await Promise.all([api.get("/users"), api.get("/departments")]);
-      setUsers(usersRes.data);
-      setDepartments(deptsRes.data);
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to load users");
+      const [uR, dR] = await Promise.all([api.get("/users"), api.get("/departments")]);
+      setUsers(uR.data);
+      setDepts(dR.data);
+    } catch (e) {
+      setError(e.response?.data?.message || "Failed to load data");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const userDeptMap = {};
-  departments.forEach(dept => {
-    dept.members?.forEach(member => {
-      const id = member._id || member;
-      if (!userDeptMap[id]) userDeptMap[id] = [];
-      userDeptMap[id].push(dept.name);
+  // Build user → dept[] map
+  const deptMap = {};
+  departments.forEach(d => {
+    d.members?.forEach(m => {
+      const id = m._id || m;
+      if (!deptMap[id]) deptMap[id] = [];
+      deptMap[id].push(d.name);
     });
   });
 
-  const handleDelete = async (userId, userName) => {
-    const ok = await confirm({
-      title: "Delete User",
-      message: `Delete "${userName}"? This cannot be undone.`,
-      icon: "🗑️",
-      danger: true,
-      confirmLabel: "Delete",
-    });
+  const doDelete = async (uid, uname) => {
+    const ok = await confirm({ title: "Delete User", message: `Delete "${uname}"? This cannot be undone.`, icon: "🗑️", danger: true, confirmLabel: "Delete" });
     if (!ok) return;
-    try {
-      await api.delete(`/users/${userId}`);
-      fetchAll();
-    } catch (err) {
-      await confirm({ type: "alert", title: "Error", message: err.response?.data?.message || "Error deleting user", icon: "⚠️", danger: false, confirmLabel: "OK" });
-    }
+    try   { await api.delete(`/users/${uid}`); fetchAll(); }
+    catch (e) { await confirm({ type: "alert", title: "Error", message: e.response?.data?.message || "Delete failed", icon: "⚠️", confirmLabel: "OK" }); }
   };
 
-  const handleToggleActive = async (userId) => {
-    try {
-      await api.patch(`/users/${userId}/toggle-active`);
-      fetchAll();
-    } catch (err) {
-      await confirm({ type: "alert", title: "Error", message: err.response?.data?.message || "Error updating user", icon: "⚠️", danger: false, confirmLabel: "OK" });
-    }
+  const doToggle = async (uid) => {
+    try   { await api.patch(`/users/${uid}/toggle-active`); fetchAll(); }
+    catch (e) { await confirm({ type: "alert", title: "Error", message: e.response?.data?.message || "Update failed", icon: "⚠️", confirmLabel: "OK" }); }
   };
+
+  const fmtDate = (d) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
   return (
-    <div className="up-root">
-      <style>{STYLES}</style>
+    <div className="up">
+      <style>{css}</style>
       <div className="up-page">
-        {/* Header */}
+
+        {/* ── Header ── */}
         <div className="up-header">
-          <div className="up-header-left">
-            <h1>Users</h1>
-            <div className="up-subtitle">
-              <span className="up-dot" />
-              {users.length} member{users.length !== 1 ? "s" : ""}
+          <div>
+            <h1 className="up-title">Users</h1>
+            <div className="up-header-meta">
+              <span className="up-live" />
+              <span className="up-count">
+                <Users size={11} /> {users.length} member{users.length !== 1 ? "s" : ""}
+              </span>
             </div>
           </div>
-          <button className="up-btn up-btn-primary" onClick={() => setShowModal(true)}>
+          <button className="up-btn up-btn-primary" onClick={() => setShowCreate(true)}>
             <UserPlus size={15} strokeWidth={2.5} /> New User
           </button>
         </div>
 
-        {error && <div className="up-alert">⚠ {error}</div>}
+        {error && (
+          <div className="up-alert"><AlertCircle size={15} /> {error}</div>
+        )}
 
+        {/* ── Body ── */}
         {loading ? (
-          <div className="up-loading"><div className="up-spinner" /></div>
+          <div className="up-card">
+            <div className="up-loading-state">
+              <Spinner size={26} />
+              <span>Loading users…</span>
+            </div>
+          </div>
         ) : users.length === 0 ? (
-          <div className="up-empty">
-            <div className="up-empty-icon">👥</div>
-            <div className="up-empty-text">No users found</div>
+          <div className="up-card">
+            <div className="up-empty">
+              <div className="up-empty-ico"><Users size={28} /></div>
+              <h3>No users yet</h3>
+              <p>Add your first team member to get started.</p>
+              <button className="up-btn up-btn-primary" style={{ marginTop: 8 }} onClick={() => setShowCreate(true)}>
+                <UserPlus size={15} /> Add First User
+              </button>
+            </div>
           </div>
         ) : (
           <>
-            {/* ── Desktop Table ── */}
-            <div className="up-table-wrap">
-              <div className="up-table-card">
+            {/* DESKTOP TABLE */}
+            <div className="up-desktop-only">
+              <div className="up-card">
                 <table className="up-table">
                   <thead>
                     <tr>
-                      <th>Name</th><th>Email</th><th>Role</th>
-                      <th>Department</th><th>Status</th><th>Joined</th><th>Actions</th>
+                      <th>User</th>
+                      <th>Role</th>
+                      <th>Department</th>
+                      <th>Status</th>
+                      <th>Joined</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {users.map((u, i) => {
-                      const deptNames = userDeptMap[u._id] || [];
+                      const depts = deptMap[u._id] || [];
                       return (
-                        <tr key={u._id} style={{ animationDelay: `${i * 40}ms` }}>
+                        <tr key={u._id} style={{ animationDelay: `${i * 30}ms` }}>
+                          {/* User */}
                           <td>
                             <div className="up-user-cell">
-                              <div className="up-avatar">{u.name?.charAt(0)?.toUpperCase() ?? "?"}</div>
-                              <span className="up-user-name">{u.name}</span>
+                              <Avatar name={u.name} />
+                              <div>
+                                <div className="up-user-name">{u.name}</div>
+                                <div className="up-user-email">{u.email}</div>
+                              </div>
                             </div>
                           </td>
-                          <td className="up-text-muted">{u.email}</td>
+
+                          {/* Role */}
                           <td>
                             <div className="up-role-cell">
-                              <span className={`up-badge ${roleColors[u.role] || ""}`}>
-                                {u.role?.replace(/_/g, " ")}
-                              </span>
-                              {isSuperAdmin && (
-                                <button className="up-icon-btn" title="Change role"
-                                  onClick={() => setRoleModal({ userId: u._id, currentRole: u.role, name: u.name })}>
+                              <RoleBadge role={u.role} />
+                              {isSA && (
+                                <button
+                                  className="up-icon-btn"
+                                  title="Change role"
+                                  onClick={() => setRoleModal({ userId: u._id, currentRole: u.role, name: u.name })}
+                                >
                                   <Pencil size={13} />
                                 </button>
                               )}
                             </div>
                           </td>
+
+                          {/* Department */}
                           <td>
-                            {deptNames.length > 0 ? (
-                              <div className="up-dept-tags">
-                                {deptNames.map(n => (
-                                  <span key={n} className="up-dept-tag"><Building2 size={10} />{n}</span>
+                            {depts.length > 0 ? (
+                              <div className="up-dept-list">
+                                {depts.map(n => (
+                                  <span key={n} className="up-dept-chip">
+                                    <Building2 size={10} />{n}
+                                  </span>
                                 ))}
                               </div>
-                            ) : <span className="up-text-dim up-text-sm">—</span>}
+                            ) : <span className="up-dim">—</span>}
                           </td>
+
+                          {/* Status */}
+                          <td><StatusBadge active={u.isActive} /></td>
+
+                          {/* Joined */}
                           <td>
-                            <span className={`up-badge ${u.isActive ? "up-badge-active" : "up-badge-inactive"}`}>
-                              {u.isActive ? "Active" : "Inactive"}
+                            <span className="up-muted" style={{ fontSize: 12, fontFamily: "'JetBrains Mono', monospace" }}>
+                              {fmtDate(u.createdAt)}
                             </span>
                           </td>
-                          <td className="up-text-muted up-text-sm">{new Date(u.createdAt).toLocaleDateString()}</td>
+
+                          {/* Actions */}
                           <td>
                             <div className="up-action-cell">
-                              {isSuperAdmin && (
+                              {isSA && (
                                 <button
-                                  className={`up-btn up-btn-xs ${u.isActive ? "up-btn-deactivate" : "up-btn-activate"}`}
-                                  onClick={() => handleToggleActive(u._id)}>
-                                  {u.isActive ? "Deactivate" : "Activate"}
+                                  className={`up-btn up-btn-xs ${u.isActive ? "up-btn-warn" : "up-btn-success"}`}
+                                  onClick={() => doToggle(u._id)}
+                                >
+                                  {u.isActive
+                                    ? <><UserX    size={12} strokeWidth={2.5} /> Deactivate</>
+                                    : <><UserCheck size={12} strokeWidth={2.5} /> Activate</>}
                                 </button>
                               )}
-                              <button className="up-btn up-btn-xs up-btn-danger" onClick={() => handleDelete(u._id, u.name)}>
-                                <Trash2 size={11} /> Delete
+                              <button
+                                className="up-btn up-btn-xs up-btn-danger"
+                                onClick={() => doDelete(u._id, u.name)}
+                              >
+                                <Trash2 size={12} strokeWidth={2.5} /> Delete
                               </button>
                             </div>
                           </td>
@@ -730,70 +774,74 @@ export default function UsersPage() {
               </div>
             </div>
 
-            {/* ── Mobile Cards ── */}
-            <div className="up-mobile-list">
-              <div className="up-cards-list">
+            {/* MOBILE CARDS */}
+            <div className="up-mobile-only">
+              <div className="up-cards">
                 {users.map((u, i) => {
-                  const deptNames = userDeptMap[u._id] || [];
+                  const depts = deptMap[u._id] || [];
                   return (
-                    <div key={u._id} className="up-user-card" style={{ animationDelay: `${i * 50}ms` }}>
-                      <div className="up-card-header">
-                        <div className="up-card-user">
-                          <div className="up-avatar up-avatar-lg">{u.name?.charAt(0)?.toUpperCase() ?? "?"}</div>
-                          <div className="up-card-info">
-                            <div className="up-card-name">{u.name}</div>
-                            <div className="up-card-email">{u.email}</div>
+                    <div key={u._id} className="up-ucard" style={{ animationDelay: `${i * 45}ms` }}>
+                      {/* Top row */}
+                      <div className="up-ucard-top">
+                        <div className="up-ucard-identity">
+                          <Avatar name={u.name} lg />
+                          <div className="up-ucard-text">
+                            <div className="up-ucard-name">{u.name}</div>
+                            <div className="up-ucard-email">{u.email}</div>
                           </div>
                         </div>
-                        <div className="up-card-badges">
-                          <span className={`up-badge ${u.isActive ? "up-badge-active" : "up-badge-inactive"}`}>
-                            {u.isActive ? "Active" : "Inactive"}
-                          </span>
+                        <div className="up-ucard-badges">
+                          <StatusBadge active={u.isActive} />
+                          <RoleBadge role={u.role} />
                         </div>
                       </div>
 
-                      <div className="up-card-meta">
-                        <div className="up-card-meta-item">
-                          <label>Role</label>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            <span className={`up-badge ${roleColors[u.role] || ""}`}>
-                              {u.role?.replace(/_/g, " ")}
-                            </span>
-                            {isSuperAdmin && (
-                              <button className="up-icon-btn" style={{ padding: "3px" }}
-                                onClick={() => setRoleModal({ userId: u._id, currentRole: u.role, name: u.name })}>
-                                <Pencil size={12} />
-                              </button>
-                            )}
+                      <div className="up-ucard-divider" />
+
+                      {/* Meta grid */}
+                      <div className="up-ucard-grid">
+                        <div>
+                          <div className="up-ucard-field-label">Department</div>
+                          <div className="up-ucard-field-val">
+                            {depts.length > 0
+                              ? depts.map(n => <span key={n} className="up-dept-chip" style={{ fontSize: 11 }}><Building2 size={10} />{n}</span>)
+                              : <span className="up-dim">—</span>}
                           </div>
                         </div>
-                        <div className="up-card-meta-item">
-                          <label>Joined</label>
-                          <span className="value">{new Date(u.createdAt).toLocaleDateString()}</span>
-                        </div>
-                        <div className="up-card-meta-item" style={{ gridColumn: "1/-1" }}>
-                          <label>Department</label>
-                          {deptNames.length > 0 ? (
-                            <div className="up-dept-tags" style={{ marginTop: 4 }}>
-                              {deptNames.map(n => (
-                                <span key={n} className="up-dept-tag"><Building2 size={10} />{n}</span>
-                              ))}
-                            </div>
-                          ) : <span className="value">—</span>}
+                        <div>
+                          <div className="up-ucard-field-label">Joined</div>
+                          <div className="up-ucard-field-val">
+                            <Calendar size={12} style={{ color: "var(--ink-300)" }} />
+                            {fmtDate(u.createdAt)}
+                          </div>
                         </div>
                       </div>
 
-                      <div className="up-card-actions">
-                        {isSuperAdmin && (
+                      {/* Footer actions */}
+                      <div className="up-ucard-footer">
+                        {isSA && (
                           <button
-                            className={`up-btn up-btn-sm ${u.isActive ? "up-btn-deactivate" : "up-btn-activate"}`}
-                            onClick={() => handleToggleActive(u._id)}>
-                            {u.isActive ? <UserX size={13} /> : <UserCheck size={13} />}
-                            {u.isActive ? "Deactivate" : "Activate"}
+                            className={`up-btn up-btn-sm ${u.isActive ? "up-btn-warn" : "up-btn-success"}`}
+                            onClick={() => doToggle(u._id)}
+                          >
+                            {u.isActive
+                              ? <><UserX    size={14} strokeWidth={2.5} /> Deactivate</>
+                              : <><UserCheck size={14} strokeWidth={2.5} /> Activate</>}
                           </button>
                         )}
-                        <button className="up-btn up-btn-sm up-btn-danger" onClick={() => handleDelete(u._id, u.name)}>
-                          <Trash2 size={13} /> Delete
+                        {isSA && (
+                          <button
+                            className="up-btn up-btn-sm up-btn-ghost"
+                            onClick={() => setRoleModal({ userId: u._id, currentRole: u.role, name: u.name })}
+                          >
+                            <Pencil size={14} strokeWidth={2.5} /> Role
+                          </button>
+                        )}
+                        <button
+                          className="up-btn up-btn-sm up-btn-danger"
+                          onClick={() => doDelete(u._id, u.name)}
+                        >
+                          <Trash2 size={14} strokeWidth={2.5} /> Delete
                         </button>
                       </div>
                     </div>
@@ -805,14 +853,16 @@ export default function UsersPage() {
         )}
       </div>
 
-      {showModal && (
-        <CreateUserModal currentUser={user} onClose={() => setShowModal(false)} onCreated={fetchAll} />
+      {showCreate && (
+        <CreateUserModal
+          currentUser={user}
+          onClose={() => setShowCreate(false)}
+          onCreated={fetchAll}
+        />
       )}
       {roleModal && (
         <ChangeRoleModal
-          userId={roleModal.userId}
-          currentRole={roleModal.currentRole}
-          userName={roleModal.name}
+          {...roleModal}
           onClose={() => setRoleModal(null)}
           onUpdated={fetchAll}
         />
@@ -821,188 +871,257 @@ export default function UsersPage() {
   );
 }
 
-/* ─── Create User Modal ─────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════
+   CREATE USER MODAL
+═══════════════════════════════════════════════════════════ */
 function CreateUserModal({ currentUser, onClose, onCreated }) {
-  const isSuperAdmin = currentUser?.role === "SUPER_ADMIN";
-  const availableRoles = isSuperAdmin ? ALL_ROLES : ["EMPLOYEE"];
-  const [form, setForm] = useState({ name: "", email: "", password: "", role: "EMPLOYEE", departmentId: "" });
-  const [departments, setDepartments] = useState([]);
-  const [deptsLoading, setDeptsLoading] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [showInlineCreate, setShowInlineCreate] = useState(false);
-  const [newDeptName, setNewDeptName] = useState("");
-  const [newDeptDesc, setNewDeptDesc] = useState("");
-  const [deptCreating, setDeptCreating] = useState(false);
-  const [deptError, setDeptError] = useState("");
+  const isSA = currentUser?.role === "SUPER_ADMIN";
+  const allowedRoles = isSA ? ALL_ROLES : ["EMPLOYEE"];
 
-  const fetchDepts = async () => {
-    try { const r = await api.get("/departments"); setDepartments(r.data); }
-    catch (e) { console.error(e); } finally { setDeptsLoading(false); }
+  const [form, setForm]             = useState({ name: "", email: "", password: "", role: "EMPLOYEE", departmentId: "" });
+  const [departments, setDepts]     = useState([]);
+  const [deptsLoading, setDL]       = useState(true);
+  const [loading, setLoading]       = useState(false);
+  const [error, setError]           = useState("");
+  const [showPwd, setShowPwd]       = useState(false);
+  const [inlineDept, setInlineDept] = useState(false);
+  const [newDept, setNewDept]       = useState({ name: "", description: "" });
+  const [deptSaving, setDS]         = useState(false);
+  const [deptError, setDE]          = useState("");
+
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const loadDepts = async () => {
+    try { const r = await api.get("/departments"); setDepts(r.data); }
+    catch {}
+    finally { setDL(false); }
   };
-  useEffect(() => { fetchDepts(); }, []);
+  useEffect(() => { loadDepts(); }, []);
 
-  const handleCreateDept = async () => {
-    if (!newDeptName.trim()) return;
-    setDeptCreating(true); setDeptError("");
+  const saveDept = async () => {
+    if (!newDept.name.trim()) return;
+    setDS(true); setDE("");
     try {
-      const r = await api.post("/departments", { name: newDeptName.trim(), description: newDeptDesc.trim(), memberIds: [] });
-      await fetchDepts();
-      setForm(p => ({ ...p, departmentId: r.data._id }));
-      setShowInlineCreate(false); setNewDeptName(""); setNewDeptDesc("");
-    } catch (e) { setDeptError(e.response?.data?.message || "Error creating department"); }
-    finally { setDeptCreating(false); }
+      const r = await api.post("/departments", { name: newDept.name.trim(), description: newDept.description.trim(), memberIds: [] });
+      await loadDepts();
+      set("departmentId", r.data._id);
+      setInlineDept(false);
+      setNewDept({ name: "", description: "" });
+    } catch (e) { setDE(e.response?.data?.message || "Failed to create"); }
+    finally { setDS(false); }
   };
 
-  const handleSubmit = async () => {
+  const submit = async () => {
     setLoading(true); setError("");
     try { await api.post("/users", form); onCreated(); onClose(); }
-    catch (e) { setError(e.response?.data?.message || "Error creating user"); }
+    catch (e) { setError(e.response?.data?.message || "Failed to create user"); }
     finally { setLoading(false); }
   };
 
+  const selDept = departments.find(d => d._id === form.departmentId);
+  const canSubmit = form.name.trim() && form.email.trim() && form.password.length >= 6;
+
   return (
-    <div className="up-overlay" onClick={onClose}>
-      <div className="up-modal up-modal-lg" onClick={e => e.stopPropagation()}>
-        <div className="up-modal-header">
-          <h2>Create User</h2>
-          <button className="up-modal-close" onClick={onClose}><X size={16} /></button>
-        </div>
-        <div className="up-modal-body">
-          {error && <div className="up-alert">⚠ {error}</div>}
-          <div className="up-form-row">
-            <div className="up-form-group">
-              <label>Full Name</label>
-              <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Jane Doe" required />
-            </div>
-            <div className="up-form-group">
-              <label>Role</label>
-              <select value={form.role} onChange={e => setForm({ ...form, role: e.target.value, departmentId: "" })}>
-                {availableRoles.map(r => <option key={r} value={r}>{r.replace(/_/g, " ")}</option>)}
-              </select>
-            </div>
-          </div>
-          <div className="up-form-group">
-            <label>Email</label>
-            <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="jane@company.com" required />
-          </div>
-          <div className="up-form-group">
-            <label>Password</label>
-            <input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="••••••••" required minLength={6} />
+    <div className="up">
+      <div className="up-overlay" onClick={onClose}>
+        <div className="up-modal up-modal-lg" onClick={e => e.stopPropagation()}>
+          <span className="up-modal-handle" />
+
+          <div className="up-modal-head">
+            <span className="up-modal-title">Create User</span>
+            <button className="up-modal-x" onClick={onClose}><X size={15} /></button>
           </div>
 
-          {form.role === "EMPLOYEE" && (
-            <div className="up-form-group">
-              <label>Department <span className="up-label-opt">(optional)</span></label>
-              {deptsLoading ? <div style={{ padding: "8px 0" }}><div className="up-spinner up-spinner-sm" /></div> : (
-                <>
-                  <select value={form.departmentId} onChange={e => {
-                    if (e.target.value === "__create__") {
-                      setShowInlineCreate(true); setForm(p => ({ ...p, departmentId: "" }));
-                    } else {
-                      setShowInlineCreate(false); setForm(p => ({ ...p, departmentId: e.target.value }));
-                    }
-                  }}>
-                    <option value="">No department</option>
-                    {departments.map(d => <option key={d._id} value={d._id}>🏢 {d.name} ({d.members?.length || 0} members)</option>)}
-                    <option value="__create__">＋ Create new department…</option>
-                  </select>
+          <div className="up-modal-body">
+            {error && <div className="up-alert"><AlertCircle size={15} /> {error}</div>}
 
-                  {showInlineCreate && (
-                    <div className="up-inline-dept">
-                      <div className="up-inline-dept-header">
-                        <p>New department</p>
-                        <button type="button" className="up-modal-close" onClick={() => { setShowInlineCreate(false); setDeptError(""); }}><X size={14} /></button>
-                      </div>
-                      {deptError && <div className="up-alert">⚠ {deptError}</div>}
-                      <div className="up-form-group">
-                        <label>Name *</label>
-                        <input value={newDeptName} onChange={e => setNewDeptName(e.target.value)} placeholder="e.g. Engineering" />
-                      </div>
-                      <div className="up-form-group">
-                        <label>Description</label>
-                        <input value={newDeptDesc} onChange={e => setNewDeptDesc(e.target.value)} placeholder="Optional" />
-                      </div>
-                      <button type="button" className="up-btn up-btn-primary up-btn-sm" onClick={handleCreateDept} disabled={deptCreating || !newDeptName.trim()}>
-                        {deptCreating ? <div className="up-spinner up-spinner-sm" /> : "Create & Select"}
-                      </button>
-                    </div>
-                  )}
-
-                  {form.departmentId && !showInlineCreate && (() => {
-                    const d = departments.find(x => x._id === form.departmentId);
-                    return d ? <p className="up-dept-hint"><Check size={13} /> Will join <strong>{d.name}</strong></p> : null;
-                  })()}
-                </>
-              )}
+            <div className="up-form-row up-field">
+              <div className="up-field" style={{ marginBottom: 0 }}>
+                <div className="up-label">Full Name</div>
+                <input className="up-input" value={form.name} onChange={e => set("name", e.target.value)} placeholder="Jane Doe" />
+              </div>
+              <div className="up-field" style={{ marginBottom: 0 }}>
+                <div className="up-label">Role</div>
+                <select className="up-input" value={form.role} onChange={e => { set("role", e.target.value); set("departmentId", ""); }}>
+                  {allowedRoles.map(r => (
+                    <option key={r} value={r}>{ROLE_CFG[r]?.label ?? r}</option>
+                  ))}
+                </select>
+              </div>
             </div>
-          )}
-        </div>
-        <div className="up-modal-footer">
-          <button type="button" className="up-btn up-btn-ghost" onClick={onClose}>Cancel</button>
-          <button type="button" className="up-btn up-btn-primary" disabled={loading} onClick={handleSubmit}>
-            {loading ? <div className="up-spinner up-spinner-sm" /> : <><UserPlus size={14} /> Create User</>}
-          </button>
+
+            <div className="up-field">
+              <div className="up-label">Email Address</div>
+              <input className="up-input" type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="jane@company.com" />
+            </div>
+
+            <div className="up-field">
+              <div className="up-label">Password</div>
+              <div className="up-input-wrap">
+                <input
+                  className="up-input"
+                  type={showPwd ? "text" : "password"}
+                  value={form.password}
+                  onChange={e => set("password", e.target.value)}
+                  placeholder="Min. 6 characters"
+                  minLength={6}
+                />
+                <button type="button" className="up-input-btn" onClick={() => setShowPwd(p => !p)}>
+                  {showPwd ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
+            </div>
+
+            {form.role === "EMPLOYEE" && (
+              <div className="up-field">
+                <div className="up-label">
+                  Department <span className="up-label-opt">optional</span>
+                </div>
+                {deptsLoading ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 0", color: "var(--ink-500)", fontSize: 13 }}>
+                    <Spinner size={14} /> Loading…
+                  </div>
+                ) : (
+                  <>
+                    <select
+                      className="up-input"
+                      value={form.departmentId}
+                      onChange={e => {
+                        if (e.target.value === "__new__") {
+                          setInlineDept(true); set("departmentId", "");
+                        } else {
+                          setInlineDept(false); set("departmentId", e.target.value);
+                        }
+                      }}
+                    >
+                      <option value="">No department</option>
+                      {departments.map(d => (
+                        <option key={d._id} value={d._id}>{d.name} ({d.members?.length ?? 0} members)</option>
+                      ))}
+                      <option value="__new__">＋ Create new department…</option>
+                    </select>
+
+                    {selDept && !inlineDept && (
+                      <div className="up-dept-ok">
+                        <Check size={14} /> Will join <strong style={{ marginLeft: 3 }}>{selDept.name}</strong>
+                      </div>
+                    )}
+
+                    {inlineDept && (
+                      <div className="up-inline-dept">
+                        <div className="up-inline-dept-head">
+                          <p>New Department</p>
+                          <button type="button" className="up-modal-x" style={{ width: 26, height: 26 }} onClick={() => { setInlineDept(false); setDE(""); }}>
+                            <X size={13} />
+                          </button>
+                        </div>
+                        {deptError && <div className="up-alert" style={{ marginBottom: 12 }}><AlertCircle size={14} /> {deptError}</div>}
+                        <div className="up-field">
+                          <div className="up-label">Name *</div>
+                          <input className="up-input" value={newDept.name} onChange={e => setNewDept(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Engineering" />
+                        </div>
+                        <div className="up-field">
+                          <div className="up-label">Description</div>
+                          <input className="up-input" value={newDept.description} onChange={e => setNewDept(p => ({ ...p, description: e.target.value }))} placeholder="Optional" />
+                        </div>
+                        <button
+                          type="button"
+                          className="up-btn up-btn-primary up-btn-sm"
+                          onClick={saveDept}
+                          disabled={deptSaving || !newDept.name.trim()}
+                        >
+                          {deptSaving ? <Spinner size={14} /> : <><Check size={14} /> Create & Select</>}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="up-modal-foot">
+            <button type="button" className="up-btn up-btn-ghost" onClick={onClose}>Cancel</button>
+            <button type="button" className="up-btn up-btn-primary" disabled={loading || !canSubmit} onClick={submit}>
+              {loading ? <Spinner size={15} /> : <><UserPlus size={15} /> Create User</>}
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-/* ─── Change Role Modal ─────────────────────────────────────────── */
-function ChangeRoleModal({ userId, currentRole, userName, onClose, onUpdated }) {
-  const [role, setRole] = useState(currentRole);
+/* ═══════════════════════════════════════════════════════════
+   CHANGE ROLE MODAL
+═══════════════════════════════════════════════════════════ */
+function ChangeRoleModal({ userId, currentRole, name, onClose, onUpdated }) {
+  const [role,    setRole]    = useState(currentRole);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error,   setError]   = useState("");
 
-  const handleSubmit = async () => {
+  const submit = async () => {
     if (role === currentRole) { onClose(); return; }
     setLoading(true); setError("");
     try { await api.patch(`/users/${userId}/role`, { role }); onUpdated(); onClose(); }
-    catch (e) { setError(e.response?.data?.message || "Error updating role"); }
+    catch (e) { setError(e.response?.data?.message || "Failed to update role"); }
     finally { setLoading(false); }
   };
 
-  const roleConfig = {
-    EMPLOYEE: { icon: <User size={18} />, cls: "up-role-icon-employee", desc: "Can view & update their own tasks" },
-    ADMIN: { icon: <Shield size={18} />, cls: "up-role-icon-admin", desc: "Can create tasks, manage employees" },
-    SUPER_ADMIN: { icon: <Crown size={18} />, cls: "up-role-icon-super", desc: "Full access — all users & tasks" },
-  };
+  const OPTS = [
+    { value: "EMPLOYEE",    Icon: User,   cls: "up-role-ico-emp",  label: "Employee",    desc: "Can view & update their own tasks" },
+    { value: "ADMIN",       Icon: Shield, cls: "up-role-ico-adm",  label: "Admin",       desc: "Creates tasks, manages employees" },
+    { value: "SUPER_ADMIN", Icon: Crown,  cls: "up-role-ico-sup",  label: "Super Admin", desc: "Full access — all users & settings" },
+  ];
 
   return (
-    <div className="up-overlay" onClick={onClose}>
-      <div className="up-modal" onClick={e => e.stopPropagation()}>
-        <div className="up-modal-header">
-          <h2>Change Role</h2>
-          <button className="up-modal-close" onClick={onClose}><X size={16} /></button>
-        </div>
-        <div className="up-modal-body">
-          {error && <div className="up-alert">⚠ {error}</div>}
-          <div className="up-role-user-hint">Updating role for <strong>{userName}</strong></div>
-          <div className="up-role-options">
-            {ALL_ROLES.map(r => {
-              const cfg = roleConfig[r];
-              return (
-                <label key={r} className={`up-role-option ${role === r ? "selected" : ""}`} onClick={() => setRole(r)}>
-                  <input type="radio" name="role" value={r} checked={role === r} onChange={() => setRole(r)} />
-                  <div className={`up-role-option-icon ${cfg.cls}`}>{cfg.icon}</div>
-                  <div className="up-role-option-text">
-                    <span className="up-role-option-label">{r.replace(/_/g, " ")}</span>
-                    <span className="up-role-option-desc">{cfg.desc}</span>
+    <div className="up">
+      <div className="up-overlay" onClick={onClose}>
+        <div className="up-modal" onClick={e => e.stopPropagation()}>
+          <span className="up-modal-handle" />
+
+          <div className="up-modal-head">
+            <span className="up-modal-title">Change Role</span>
+            <button className="up-modal-x" onClick={onClose}><X size={15} /></button>
+          </div>
+
+          <div className="up-modal-body">
+            {error && <div className="up-alert"><AlertCircle size={15} /> {error}</div>}
+
+            <div className="up-role-who">
+              <Avatar name={name} />
+              <span>Updating role for <strong>{name}</strong></span>
+            </div>
+
+            <div className="up-role-opts">
+              {OPTS.map(o => (
+                <label
+                  key={o.value}
+                  className={`up-role-opt ${role === o.value ? "active" : ""}`}
+                  onClick={() => setRole(o.value)}
+                >
+                  <input type="radio" name="role" value={o.value} checked={role === o.value} onChange={() => setRole(o.value)} />
+                  <div className={`up-role-ico ${o.cls}`}>
+                    <o.Icon size={18} strokeWidth={2} />
                   </div>
-                  <div className="up-role-check">
-                    {role === r && <Check size={12} color="#fff" strokeWidth={3} />}
+                  <div className="up-role-txt">
+                    <span className="up-role-name">{o.label}</span>
+                    <span className="up-role-desc">{o.desc}</span>
+                  </div>
+                  <div className="up-radio">
+                    {role === o.value && <Check size={11} color="#fff" strokeWidth={3} />}
                   </div>
                 </label>
-              );
-            })}
+              ))}
+            </div>
           </div>
-        </div>
-        <div className="up-modal-footer">
-          <button type="button" className="up-btn up-btn-ghost" onClick={onClose}>Cancel</button>
-          <button type="button" className="up-btn up-btn-primary" disabled={loading} onClick={handleSubmit}>
-            {loading ? <div className="up-spinner up-spinner-sm" /> : <><ShieldCheck size={14} /> Update Role</>}
-          </button>
+
+          <div className="up-modal-foot">
+            <button type="button" className="up-btn up-btn-ghost" onClick={onClose}>Cancel</button>
+            <button type="button" className="up-btn up-btn-primary" disabled={loading} onClick={submit}>
+              {loading ? <Spinner size={15} /> : <><ShieldCheck size={15} /> Update Role</>}
+            </button>
+          </div>
         </div>
       </div>
     </div>
