@@ -107,7 +107,7 @@ export const updateDepartment = async (deptId, data, currentUser) => {
 
   if (memberIds !== undefined) {
     if (memberIds.length > 0) {
-      const members = await User.find({ _id: { $in: memberIds }, role: "EMPLOYEE" });
+      const members = await User.find({ _id: { $in: memberIds }});
       if (members.length !== memberIds.length) {
         throw new Error("Some selected users are not employees");
       }

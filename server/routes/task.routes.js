@@ -5,13 +5,13 @@ import {
   update,
   remove,
 } from "../controllers/task.controller.js";
-import { protect } from "../middlewares/auth.middleware.js";
+import { protect , isRoleChange} from "../middlewares/auth.middleware.js";
 
 const router = express.Router();
-
-router.post("/", protect, create);
-router.get("/", protect, getAll);
-router.put("/:id", protect, update);
-router.delete("/:id", protect, remove);
+router.use(protect,isRoleChange);
+router.post("/", create);
+router.get("/", getAll);
+router.put("/:id", update);
+router.delete("/:id", remove);
 
 export default router;

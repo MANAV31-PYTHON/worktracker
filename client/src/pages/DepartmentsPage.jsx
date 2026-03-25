@@ -162,10 +162,9 @@ function DeptModal({ dept, onClose, onSaved }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
-
   useEffect(() => {
     api.get("/users")
-      .then((res) => setEmployees(res.data.filter((u) => u.role === "EMPLOYEE")))
+      .then((res) => setEmployees(res.data))
       .catch(console.error);
   }, []);
 
@@ -196,12 +195,18 @@ function DeptModal({ dept, onClose, onSaved }) {
       setLoading(false);
     }
   };
-
-  const filtered = employees.filter(
-    (e) =>
-      e.name.toLowerCase().includes(search.toLowerCase()) ||
-      e.email.toLowerCase().includes(search.toLowerCase())
-  );
+    const rolePriority = {
+      SUPER_ADMIN: 1,
+      ADMIN: 2,
+      EMPLOYEE: 3,
+    };
+    const filtered = employees
+      .filter(
+        (e) =>
+          e.name.toLowerCase().includes(search.toLowerCase()) ||
+          e.email.toLowerCase().includes(search.toLowerCase())
+      )
+      .sort((a, b) => rolePriority[a.role] - rolePriority[b.role]);
 
   return (
     <div className="modal-overlay" onClick={onClose}>
