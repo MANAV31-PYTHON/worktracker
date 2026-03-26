@@ -1,10 +1,18 @@
 import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";   
 
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
+
     email: { type: String, unique: true, required: true },
-    password: { type: String, required: true },
+
+    password: { 
+      type: String, 
+      required: true,
+      select: false   // 🔐 hide password by default
+    },
 
     role: {
       type: String,
@@ -14,6 +22,17 @@ const userSchema = new mongoose.Schema(
 
     isActive: { type: Boolean, default: true },
 
+    // 🔐 Reset password fields
+    resetPasswordToken: {
+      type: String,
+      select: false   // hide from queries
+    },
+
+    resetPasswordExpire: {
+      type: Date,
+      select: false   // hide from queries
+    },
+
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -21,5 +40,12 @@ const userSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+userSchema.pre("save", async function () {
+  // Only hash if password is modified
+  if (!this.isModified("password")) return;
+
+  this.password = await bcrypt.hash(this.password, 10);
+});
 
 export default mongoose.model("User", userSchema);

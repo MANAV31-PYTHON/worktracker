@@ -679,6 +679,50 @@ a:hover { color: var(--accent-h); }
 }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
+/* 🔐 Input with Icons (Email + Password) */
+.input-wrapper {
+  position: relative;
+}
+
+.input-wrapper input {
+  width: 100%;
+  padding-left: 38px;   /* space for left icon */
+  padding-right: 38px;  /* space for eye icon */
+}
+
+/* Left Icon (Mail / Lock) */
+.input-icon {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  transform: translateY(-50%);
+  color: var(--text-4);
+  pointer-events: none;
+}
+
+/* Right Toggle Button (Eye) */
+.toggle-btn {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 6px;
+  transition: all 0.15s var(--ease);
+}
+
+.toggle-btn:hover {
+  background: var(--bg3);
+  color: var(--text);
+}
+
 /* ══════════════════════════════════════
    BUTTONS
 ══════════════════════════════════════ */
@@ -738,6 +782,37 @@ a:hover { color: var(--accent-h); }
 }
 .icon-btn:hover { background: var(--bg3); color: var(--text); border-color: var(--border2); }
 .icon-btn.danger:hover { background: var(--red-bg); color: var(--red); border-color: var(--red-b); }
+
+/* Forgot Page  */
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal {
+  background: white;
+  padding: 25px;
+  border-radius: 12px;
+  width: 350px;
+  text-align: center;
+}
+
+.close-btn {
+  margin-top: 10px;
+  background: transparent;
+  border: none;
+  color: red;
+  cursor: pointer;
+}
+
 
 /* ══════════════════════════════════════
    ALERTS

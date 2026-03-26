@@ -11,13 +11,10 @@ export const registerUser = async (data) => {
 
   const existingUser = await User.findOne({ email });
   if (existingUser) throw new Error("User already exists");
-
-  const hashedPassword = await bcrypt.hash(password, 10);
-
   await User.create({
     name,
     email,
-    password: hashedPassword,
+    password, // ✅ plain password (will be hashed automatically)
     role: "EMPLOYEE",
   });
 
@@ -30,19 +27,29 @@ export const loginUser = async (data) => {
   const { email, password } = data;
   if (!email || !password) throw new Error("Email and password required");
 
-  const user = await User.findOne({ email });
+  // 🔥 IMPORTANT: include password explicitly
+  const user = await User.findOne({
+    email: { $regex: `^${email}$`, $options: "i" }
+  }).select("+password");
+
   if (!user) throw new Error("Invalid credentials");
 
-  if (!user.isActive) throw new Error("Account is deactivated. Contact your administrator.");
+  if (!user.isActive)
+    throw new Error("Account is deactivated. Contact your administrator.");
 
+  // 🔐 compare hashed password
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) throw new Error("Invalid credentials");
 
+  // 🔑 generate JWT
   const token = jwt.sign(
     { id: user._id, role: user.role },
     process.env.JWT_SECRET,
-    { expiresIn: "7d" }
+    { expiresIn: process.env.JWT_EXPIRE || "7d"}
   );
+
+  // ❌ remove password before sending response
+  user.password = undefined;
 
   return { user, token };
 };

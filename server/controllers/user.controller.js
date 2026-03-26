@@ -4,6 +4,8 @@ import {
   deleteUser,
   updateUserRole,
   toggleUserActive,
+  forgotPassword,
+  resetPassword
 } from "../services/user.service.js";
 
 export const create = async (req, res) => {
@@ -48,5 +50,35 @@ export const remove = async (req, res) => {
     res.json(data);
   } catch (err) {
     res.status(403).json({ message: err.message });
+  }
+};
+
+export const forgot = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const data = await forgotPassword(email);
+
+    res.status(200).json(data);
+  } catch (err) {
+     console.log("FORGOT ERROR:", err);
+    res.status(400).json({ message: err.message });
+  }
+};
+
+export const reset = async (req, res) => {
+  try {
+    const { password } = req.body;
+    const { token } = req.params;
+
+    if (!password) {
+      return res.status(400).json({ message: "Password is required" });
+    }
+
+    const result = await resetPassword(token, password);
+
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
   }
 };

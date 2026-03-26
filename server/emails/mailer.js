@@ -8,6 +8,8 @@ import {
   taskUpdatedEmployeeEmail,
   taskDeletedEmployeeEmail,
   taskDeletedAdminEmail,
+  passwordResetEmail,
+  passwordChangedEmail,
 } from "./templates.js";
 
 const clean = (val) => (val || "").replace(/^["']|["']$/g, "").trim();
@@ -29,6 +31,20 @@ const send = async ({ to, subject, html }) => {
   }
 };
 
+
+
+// -- password Frogot ------------------------
+
+export const sendPasswordResetEmail = (user, resetURL) => {
+  return send({
+    to: user.email,
+    subject: "Reset your WorkTrack password",
+    html: passwordResetEmail({
+      name: user.name,
+      resetURL,
+    }),
+  });
+};
 // ── Verification ─────────────────────────────────────────────────────────────
 
 export const sendVerificationEmail = (user, token) => {
@@ -37,6 +53,18 @@ export const sendVerificationEmail = (user, token) => {
     to: user.email,
     subject: "Verify your WorkTrack email",
     html: verificationEmail({ name: user.name, verifyUrl }),
+  });
+};
+
+//-- reset sucessfull
+
+export const sendPasswordChangedEmail = (user) => {
+  return send({
+    to: user.email,
+    subject: "Your WorkTrack password was changed",
+    html: passwordChangedEmail({
+      name: user.name,
+    }),
   });
 };
 

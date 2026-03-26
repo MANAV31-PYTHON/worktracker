@@ -1,5 +1,7 @@
 import User from "../models/user.model.js";
 import Department from "../models/department.model.js";
+import crypto from "crypto";
+import { sendPasswordResetEmail ,sendPasswordChangedEmail} from "../emails/mailer.js";
 import bcrypt from "bcryptjs";
 
 /**
@@ -19,7 +21,9 @@ export const createUser = async (data, currentUser) => {
   const allowedRoles = ["EMPLOYEE", "ADMIN", "SUPER_ADMIN"];
   if (!allowedRoles.includes(role)) throw new Error("Invalid role");
 
-  const existing = await User.findOne({ email });
+  const existingUser = await User.findOne({
+      email: { $regex: `^${email}$`, $options: "i" }
+    });
   if (existing) throw new Error("User already exists");
 
   const hashedPassword = await bcrypt.hash(password, 10);
@@ -116,4 +120,63 @@ export const deleteUser = async (userId, currentUser) => {
 
   await user.deleteOne();
   return { message: "User deleted successfully" };
+};
+
+export const forgotPassword = async (email) => {
+
+  const user = await User.findOne({
+    email: { $regex: `^${email}$`, $options: "i" }
+  });
+  if (!user) {
+  return { message: "If an account exists, a reset email has been sent" };
+}
+
+  const resetToken = crypto.randomBytes(32).toString("hex");
+
+  user.resetPasswordToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
+
+  user.resetPasswordExpire = Date.now() + 15 * 60 * 1000; // 15 min
+
+  await user.save();
+
+  const resetURL = `${process.env.APP_URL || "http://localhost:5173"}/reset-password/${resetToken}`;
+
+  await sendPasswordResetEmail(user, resetURL);
+
+return { message: "Password reset email sent" };
+};
+
+
+export const resetPassword = async (token, newPassword) => {
+
+  if (newPassword.length < 6) {
+    throw new Error("Password must be at least 6 characters");
+  }
+    const hashedToken = crypto
+    .createHash("sha256")
+    .update(token)
+    .digest("hex");
+
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpire: { $gt: Date.now() },
+    }).select("+resetPasswordToken +resetPasswordExpire +password");
+
+    if (!user) {
+      throw new Error("Invalid or expired token");
+    }
+
+    user.password = newPassword;
+
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+
+    await user.save();
+
+    await sendPasswordChangedEmail(user);
+
+    return { message: "Password reset successful" };
 };

@@ -151,6 +151,34 @@ export const verificationEmail = ({ name, verifyUrl }) =>
     </p>
   `);
 
+
+/**
+ * email reset mail
+ */
+
+export const passwordResetEmail = ({ name, resetURL }) =>
+  base("Reset your password — WorkTrack", `
+    ${greeting(name)}
+
+    <p style="font-size:15px;color:#374151;line-height:1.6;margin:0 0 20px;">
+      We received a request to reset your password for your WorkTrack account.
+    </p>
+
+    <p style="font-size:15px;color:#374151;line-height:1.6;margin:0 0 20px;">
+      Click the button below to set a new password:
+    </p>
+
+    ${ctaButton("Reset Password", resetURL)}
+
+    <p style="font-size:13px;color:#6b7280;margin:10px 0;">
+      This link will expire in <strong>15 minutes</strong>.
+    </p>
+
+    <p style="font-size:13px;color:#9ca3af;margin:16px 0 0;">
+      If you did not request this, please ignore this email.
+    </p>
+  `);
+
 /**
  * Task assigned → sent to employee
  */
@@ -212,6 +240,30 @@ export const taskCompletedEmail = ({ recipientName, employeeName, task }) =>
     ${ctaButton("View All Tasks", `${APP_URL}/tasks`)}
   `);
 
+
+  //passwer reset successfull page
+  export const passwordChangedEmail = ({ name }) =>
+  base("Password changed — WorkTrack", `
+    ${greeting(name)}
+    <p style="font-size:15px;color:#374151;line-height:1.6;margin:0 0 20px;">
+      Your password has been successfully changed.
+    </p>
+
+    <p style="font-size:14px;color:#6b7280;margin:0 0 10px;">
+      If you made this change, no further action is required.
+    </p>
+
+    <p style="font-size:14px;color:#dc2626;margin:0 0 20px;">
+      If you did NOT change your password, please contact support immediately.
+    </p>
+
+    ${ctaButton("Go to Login", `${APP_URL}/login`)}
+
+    <p style="font-size:13px;color:#9ca3af;margin:16px 0 0;">
+      This is a security notification from WorkTrack.
+    </p>
+  `);
+
 /**
  * Task updated by admin → sent to employee
  */
@@ -256,17 +308,17 @@ export const taskDeletedAdminEmail = ({ adminName, taskTitle, employeeName }) =>
 /**
  * Password reset (for future use)
  */
-export const passwordResetEmail = ({ name, resetUrl }) =>
-  base("Reset your password — WorkTrack", `
-    ${greeting(name)}
-    <p style="font-size:15px;color:#374151;line-height:1.6;margin:0 0 20px;">
-      We received a request to reset your password. Click below to set a new one.
-    </p>
-    <p style="font-size:13px;color:#6b7280;margin:0 0 4px;">
-      This link expires in <strong>1 hour</strong>.
-    </p>
-    ${ctaButton("Reset Password", resetUrl)}
-    <p style="font-size:13px;color:#9ca3af;margin:16px 0 0;">
-      If you didn't request a password reset, you can safely ignore this email.
-    </p>
-  `);
+// export const passwordResetEmail = ({ name, resetUrl }) =>
+//   base("Reset your password — WorkTrack", `
+//     ${greeting(name)}
+//     <p style="font-size:15px;color:#374151;line-height:1.6;margin:0 0 20px;">
+//       We received a request to reset your password. Click below to set a new one.
+//     </p>
+//     <p style="font-size:13px;color:#6b7280;margin:0 0 4px;">
+//       This link expires in <strong>1 hour</strong>.
+//     </p>
+//     ${ctaButton("Reset Password", resetUrl)}
+//     <p style="font-size:13px;color:#9ca3af;margin:16px 0 0;">
+//       If you didn't request a password reset, you can safely ignore this email.
+//     </p>
+//   `);
