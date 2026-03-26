@@ -350,6 +350,7 @@ export default function LoginPage() {
             Don't have an account? <Link to="/register">Register here</Link>
           </div>
 
+
         </div>
       </div>
 
