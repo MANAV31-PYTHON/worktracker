@@ -128,6 +128,7 @@ export const getTasks = async (currentUser) => {
 // UPDATE TASK (admin edits title/desc/overall/deadline/assignees)
 // ─────────────────────────────────────────────────────────────────────────────
 export const updateTask = async (taskId, data, currentUser) => {
+  const isSuperAdmin = currentUser.role === "SUPER_ADMIN";
   const task = await Task.findById(taskId);
   if (!task || task.isDeleted) throw new Error("Task not found");
 
@@ -180,16 +181,25 @@ export const updateTask = async (taskId, data, currentUser) => {
 
     const populated = await Task.findById(task._id).populate(POPULATE);
     const assignedByName = populated.assignedBy?.name || "Admin";
+
+    if (!isSuperAdmin) {
+        const assignees = await User.find({ _id: { $in: task.assignees.map((a) => a.user) } });
+
+        assignees.forEach((emp) =>
+          sendTaskUpdatedToEmployee(emp, assignedByName, populated)
+        );
+      }
+
+    if (!isSuperAdmin) {
+    task.assignees.forEach(({ user: empId }) => {
+      sendNotification(empId.toString(), "task_updated", {
+        message: `Your task "${task.title}" was updated by ${assignedByName}`,
+        task: populated,
+      });
+    });
+  }
     const statusLabel    = task.overallStatus.replace(/_/g, " ");
     const isCompleted    = task.overallStatus === "COMPLETED";
-
-    // Notify every assignee
-    task.assignees.forEach(({ user: empId }) => {
-      const msg = isCompleted
-        ? `✅ Your task "${task.title}" has been marked as completed`
-        : `Your task "${task.title}" was updated by ${assignedByName} — ${statusLabel}, ${task.overallProgress}%`;
-      sendNotification(empId.toString(), "task_updated", { message: msg, task: populated });
-    });
 
     if (currentUser.role === "ADMIN") {
       sendNotificationToRole("SUPER_ADMIN", "task_updated", {
@@ -197,10 +207,6 @@ export const updateTask = async (taskId, data, currentUser) => {
         task: populated,
       }, currentUser.id);
     }
-
-    const assignees = await User.find({ _id: { $in: task.assignees.map((a) => a.user) } });
-    assignees.forEach((emp) => sendTaskUpdatedToEmployee(emp, assignedByName, populated));
-
     if (currentUser.role === "ADMIN") {
       const superAdmins = await User.find({ role: "SUPER_ADMIN" });
       superAdmins.forEach((sa) =>
@@ -249,6 +255,27 @@ export const updateMyProgress = async (taskId, data, currentUser) => {
     } catch (err) { console.error("Auto-log error:", err.message); }
 
     const populated = await Task.findById(task._id).populate(POPULATE);
+        // ✅ Notify OTHER employees
+    task.assignees.forEach(({ user: empId }) => {
+      if (empId.toString() !== currentUser.id) {
+        sendNotification(empId.toString(), "task_updated", {
+          message: `${currentUser.name} updated "${task.title}" — ${entry.status}, ${entry.progress}%`,
+          task: populated,
+        });
+      }
+    });
+
+        // ✅ Email OTHER employees
+    const otherEmployees = await User.find({
+      _id: {
+        $in: task.assignees.map(a => a.user),
+        $ne: currentUser.id
+      }
+    });
+
+    otherEmployees.forEach(emp =>
+      sendTaskUpdatedToEmployee(emp, currentUser.name, populated)
+    );
     const empName    = currentUser.name || "Employee";
     const statusLabel = entry.status.replace(/_/g, " ");
     const isCompleted = entry.status === "COMPLETED";

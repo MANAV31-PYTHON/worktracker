@@ -18,13 +18,16 @@ export const createUser = async (data, currentUser) => {
     throw new Error("Admins can only create Employee accounts");
   }
 
-  const allowedRoles = ["EMPLOYEE", "ADMIN", "SUPER_ADMIN"];
+  const allowedRoles = ["EMPLOYEE", "ADMIN"];
   if (!allowedRoles.includes(role)) throw new Error("Invalid role");
 
   const existingUser = await User.findOne({
       email: { $regex: `^${email}$`, $options: "i" }
     });
-  if (existing) throw new Error("User already exists");
+
+    if (existingUser) {
+      throw new Error("User already exists");
+    }
 
   const hashedPassword = await bcrypt.hash(password, 10);
 
