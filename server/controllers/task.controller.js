@@ -2,6 +2,7 @@ import {
   createTask,
   getTasks,
   updateTask,
+  updateMyProgress,
   deleteTask,
 } from "../services/task.service.js";
 
@@ -26,6 +27,15 @@ export const getAll = async (req, res) => {
 export const update = async (req, res) => {
   try {
     const task = await updateTask(req.params.id, req.body, req.user);
+    res.json(task);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};
+
+export const myProgress = async (req, res) => {
+  try {
+    const task = await updateMyProgress(req.params.id, req.body, req.user);
     res.json(task);
   } catch (err) {
     res.status(400).json({ message: err.message });

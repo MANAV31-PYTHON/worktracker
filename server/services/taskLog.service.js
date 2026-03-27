@@ -7,60 +7,43 @@ import { sendTaskUpdatedToAdmin } from "../emails/mailer.js";
 export const createLog = async ({ taskId, userId, message, progress, status }) => {
   const log = await TaskLog.create({ taskId, userId, message, progress, status });
 
-  const updateFields = {};
-  if (progress !== undefined) updateFields.progress = progress;
-  if (status)                 updateFields.status   = status;
-
-  let task = null;
-  if (Object.keys(updateFields).length > 0) {
-    task = await Task.findByIdAndUpdate(taskId, updateFields, { returnDocument: "after" })
-      .populate("assignedTo", "name email")
-      .populate("assignedBy", "name email");
-  } else {
-    task = await Task.findById(taskId)
-      .populate("assignedTo", "name email")
-      .populate("assignedBy", "name email");
-  }
+  const task = await Task.findById(taskId)
+    .populate("assignees.user", "name email")
+    .populate("assignedBy", "name email");
 
   if (!task) return log;
 
-  const employeeName  = task.assignedTo?.name || "Employee";
   const assignedById  = task.assignedBy?._id?.toString();
-  const isCompleted   = (status ?? task.status) === "COMPLETED";
-  const statusLabel   = (status ?? task.status).replace(/_/g, " ");
-  const progressValue = progress ?? task.progress;
-  const oldStatus     = status ? task.status : undefined; // approximate
-  const oldProgress   = progress ?? task.progress;
+  const isCompleted   = (status ?? task.overallStatus) === "COMPLETED";
+  const statusLabel   = (status ?? task.overallStatus).replace(/_/g, " ");
+  const progressValue = progress ?? task.overallProgress;
+
+  // Try to find the employee name from the userId
+  const actorEntry = task.assignees.find((a) => a.user?._id?.toString() === userId?.toString());
+  const employeeName = actorEntry?.user?.name || "Employee";
 
   const adminMsg = isCompleted
-    ? `✅ ${employeeName} completed "${task.title}"!`
+    ? `✅ ${employeeName} completed their part of "${task.title}"!`
     : `${employeeName} updated "${task.title}" — ${statusLabel}, ${progressValue}%`;
 
-  // 🔔 Socket — notify assigning admin
-  if (assignedById && assignedById !== userId.toString()) {
+  if (assignedById && assignedById !== userId?.toString()) {
     sendNotification(assignedById, "task_updated", { message: adminMsg, task });
   }
-
-  // 🔔 Socket — notify all super admins
   sendNotificationToRole("SUPER_ADMIN", "task_updated", { message: adminMsg, task }, userId);
 
-  // 📧 Email — assigning admin
-  if (assignedById && assignedById !== userId.toString()) {
+  if (assignedById && assignedById !== userId?.toString()) {
     const admin = await User.findById(assignedById);
-    if (admin) sendTaskUpdatedToAdmin(admin, employeeName, task, oldStatus, oldProgress);
+    if (admin) sendTaskUpdatedToAdmin(admin, employeeName, task, status, progress);
   }
 
-  // 📧 Email — all super admins (excluding actor)
   const superAdmins = await User.find({ role: "SUPER_ADMIN", _id: { $ne: userId } });
-  superAdmins.forEach((sa) =>
-    sendTaskUpdatedToAdmin(sa, employeeName, task, oldStatus, oldProgress)
-  );
+  superAdmins.forEach((sa) => sendTaskUpdatedToAdmin(sa, employeeName, task, status, progress));
 
   return log;
 };
 
 export const getTaskLogs = async (taskId) => {
-  return await TaskLog.find({ taskId })
+  return TaskLog.find({ taskId })
     .populate("userId", "name role")
     .sort({ createdAt: -1 });
 };

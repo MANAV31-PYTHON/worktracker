@@ -1,18 +1,40 @@
 import mongoose from "mongoose";
 
-const taskSchema = new mongoose.Schema(
+// Per-assignee progress entry
+const assigneeProgressSchema = new mongoose.Schema(
   {
-    title: {
-      type: String,
-      required: true,
-    },
-
-    description: String,
-
-    assignedTo: {
+    user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+    },
+    status: {
+      type: String,
+      enum: ["PENDING", "IN_PROGRESS", "COMPLETED", "BLOCKED"],
+      default: "PENDING",
+    },
+    progress: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
+    },
+  },
+  { _id: false }
+);
+
+const taskSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true },
+    description: String,
+
+    // Each assignee tracks their own status + progress
+    assignees: {
+      type: [assigneeProgressSchema],
+      validate: {
+        validator: (v) => Array.isArray(v) && v.length > 0,
+        message: "At least one employee must be assigned",
+      },
     },
 
     assignedBy: {
@@ -21,10 +43,17 @@ const taskSchema = new mongoose.Schema(
       required: true,
     },
 
-    status: {
+    // Overall task view — admin-controlled
+    overallStatus: {
       type: String,
       enum: ["PENDING", "IN_PROGRESS", "COMPLETED", "BLOCKED"],
       default: "PENDING",
+    },
+    overallProgress: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100,
     },
 
     priority: {
@@ -32,20 +61,8 @@ const taskSchema = new mongoose.Schema(
       enum: ["LOW", "MEDIUM", "HIGH"],
       default: "MEDIUM",
     },
-
     deadline: Date,
-
-    progress: {
-      type: Number,
-      default: 0,
-      min: 0,
-      max: 100,
-    },
-
-    isDeleted: {
-      type: Boolean,
-      default: false,
-    },
+    isDeleted: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

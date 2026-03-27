@@ -3,8 +3,8 @@ import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import socket from "../sockets/socket";
 import { useDialog } from "../components/Dialog";
-import { HiPlus, HiPencil, HiTrash, HiClipboardList } from "react-icons/hi";
-import { HiBuildingOffice2, HiUser, HiShieldCheck, HiCalendarDays } from "react-icons/hi2";
+import { HiPlus, HiPencil, HiTrash, HiClipboardList, HiChevronDown, HiChevronUp } from "react-icons/hi";
+import { HiBuildingOffice2, HiUser, HiShieldCheck, HiCalendarDays, HiUsers } from "react-icons/hi2";
 
 const statusOptions = ["PENDING", "IN_PROGRESS", "COMPLETED", "BLOCKED"];
 const priorityOptions = ["LOW", "MEDIUM", "HIGH"];
@@ -15,12 +15,21 @@ const statusColors = {
   COMPLETED: "badge-done",
   BLOCKED: "badge-blocked",
 };
-
 const priorityColors = {
   LOW: "pri-low",
   MEDIUM: "pri-medium",
   HIGH: "pri-high",
 };
+const statusDot = {
+  PENDING: "#f59e0b",
+  IN_PROGRESS: "#6366f1",
+  COMPLETED: "#22c55e",
+  BLOCKED: "#ef4444",
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const progressFillClass = (p) =>
+  p === 100 ? "fill-done" : p > 50 ? "fill-mid" : "fill-low";
 
 export default function TasksPage() {
   const { user } = useAuth();
@@ -30,18 +39,21 @@ export default function TasksPage() {
   const isEmployee = role === "EMPLOYEE";
   const { confirm } = useDialog();
 
-  const [tasks, setTasks] = useState([]);
-  const [employees, setEmployees] = useState([]);
+  const [tasks, setTasks]           = useState([]);
+  const [employees, setEmployees]   = useState([]);
   const [departments, setDepartments] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showUpdateModal, setShowUpdateModal] = useState(false);
-  const [showLogsModal, setShowLogsModal] = useState(false);
-  const [selectedTask, setSelectedTask] = useState(null);
-  const [logs, setLogs] = useState([]);
-  const [logsLoading, setLogsLoading] = useState(false);
-  const [filter, setFilter] = useState("ALL");
+  const [loading, setLoading]       = useState(true);
+  const [filter, setFilter]         = useState("ALL");
   const [deptFilter, setDeptFilter] = useState("ALL");
+
+  // Modals
+  const [showCreate, setShowCreate]   = useState(false);
+  const [showUpdate, setShowUpdate]   = useState(false);
+  const [showLogs, setShowLogs]       = useState(false);
+  const [showMyProgress, setShowMyProgress] = useState(false);
+  const [selectedTask, setSelectedTask]     = useState(null);
+  const [logs, setLogs]               = useState([]);
+  const [logsLoading, setLogsLoading] = useState(false);
 
   const fetchTasks = useCallback(async () => {
     try {
@@ -56,50 +68,41 @@ export default function TasksPage() {
 
   useEffect(() => {
     fetchTasks();
-    // Departments needed for both filtering and the create modal
-    api.get("/departments").then((res) => setDepartments(res.data)).catch(console.error);
+    api.get("/departments").then((r) => setDepartments(r.data)).catch(console.error);
     if (isAdmin) {
-      api
-        .get("/users")
-        .then((res) => setEmployees(res.data.filter((u) => u.role === "EMPLOYEE")))
+      api.get("/users")
+        .then((r) => setEmployees(r.data.filter((u) => u.role === "EMPLOYEE")))
         .catch(console.error);
     }
   }, [fetchTasks, isAdmin]);
 
   useEffect(() => {
-    const onAssigned = () => fetchTasks();
-    const onUpdated  = () => fetchTasks();
-    const onDeleted  = () => fetchTasks();
-    socket.on("task_assigned", onAssigned);
-    socket.on("task_updated",  onUpdated);
-    socket.on("task_deleted",  onDeleted);
+    const refresh = () => fetchTasks();
+    socket.on("task_assigned", refresh);
+    socket.on("task_updated",  refresh);
+    socket.on("task_deleted",  refresh);
     return () => {
-      socket.off("task_assigned", onAssigned);
-      socket.off("task_updated",  onUpdated);
-      socket.off("task_deleted",  onDeleted);
+      socket.off("task_assigned", refresh);
+      socket.off("task_updated",  refresh);
+      socket.off("task_deleted",  refresh);
     };
   }, [fetchTasks]);
 
   const openLogs = async (task) => {
     setSelectedTask(task);
-    setShowLogsModal(true);
+    setShowLogs(true);
     setLogsLoading(true);
     try {
       const res = await api.get(`/logs/${task._id}`);
       setLogs(res.data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLogsLoading(false);
-    }
+    } catch (err) { console.error(err); }
+    finally { setLogsLoading(false); }
   };
 
   const handleDelete = async (taskId) => {
     const ok = await confirm({
-      title: "Delete Task",
-      message: "Are you sure you want to delete this task? This action cannot be undone.",
-      icon: "🗑️",
-      danger: true,
+      title: "Delete Task", icon: "🗑️", danger: true,
+      message: "Are you sure you want to delete this task? This cannot be undone.",
       confirmLabel: "Delete Task",
     });
     if (!ok) return;
@@ -107,36 +110,34 @@ export default function TasksPage() {
       await api.delete(`/tasks/${taskId}`);
       fetchTasks();
     } catch (err) {
-      await confirm({
-        type: "alert",
-        title: "Error",
-        message: err.response?.data?.message || "Error deleting task",
-        icon: "⚠️",
-        danger: false,
-        confirmLabel: "OK",
-      });
+      await confirm({ type: "alert", title: "Error", icon: "⚠️", danger: false, confirmLabel: "OK",
+        message: err.response?.data?.message || "Error deleting task" });
     }
   };
 
-  const canEmployeeEdit = (task) =>
-    isEmployee && task.assignedTo?._id === user?._id;
+  // Is this employee one of the assignees?
+  const myAssigneeEntry = (task) =>
+    isEmployee
+      ? task.assignees?.find((a) => (a.user?._id || a.user) === user?._id)
+      : null;
 
-  // Helper: find which department an employee belongs to
-  const getDeptForEmployee = (employeeId) => {
-    if (!employeeId) return null;
-    return departments.find((d) =>
-      d.members?.some((m) => (m._id || m) === employeeId)
-    );
+  // Dept of the first assignee (for card chip)
+  const getDept = (task) => {
+    const firstId = task.assignees?.[0]?.user?._id || task.assignees?.[0]?.user;
+    if (!firstId) return null;
+    return departments.find((d) => d.members?.some((m) => (m._id || m) === firstId));
   };
 
-  // Chain status + department filters
+  // Filter tasks
   const filtered = tasks
-    .filter((t) => filter === "ALL" || t.status === filter)
+    .filter((t) => filter === "ALL" || t.overallStatus === filter)
     .filter((t) => {
       if (deptFilter === "ALL") return true;
-      const assignedId = t.assignedTo?._id || t.assignedTo;
       const dept = departments.find((d) => d._id === deptFilter);
-      return dept?.members?.some((m) => (m._id || m) === assignedId);
+      return t.assignees?.some((a) => {
+        const id = a.user?._id || a.user;
+        return dept?.members?.some((m) => (m._id || m) === id);
+      });
     });
 
   return (
@@ -144,34 +145,17 @@ export default function TasksPage() {
       <div className="page-header">
         <div>
           <h1>Tasks</h1>
-          <p className="text-muted">
-            {tasks.length} total task{tasks.length !== 1 ? "s" : ""}
-          </p>
+          <p className="text-muted">{tasks.length} total task{tasks.length !== 1 ? "s" : ""}</p>
         </div>
-
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {/* Department filter — only meaningful for admins */}
           {isAdmin && (
-            <select
-              value={deptFilter}
-              onChange={(e) => setDeptFilter(e.target.value)}
-              className="filter-select"
-            >
+            <select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)} className="filter-select">
               <option value="ALL">All Departments</option>
-              {departments.map((d) => (
-                <option key={d._id} value={d._id}>
-                  {d.name}
-                </option>
-              ))}
+              {departments.map((d) => <option key={d._id} value={d._id}>{d.name}</option>)}
             </select>
           )}
-
           {isAdmin && (
-            <button
-              className="btn btn-primary"
-              style={{ gap: 6 }}
-              onClick={() => setShowCreateModal(true)}
-            >
+            <button className="btn btn-primary" style={{ gap: 6 }} onClick={() => setShowCreate(true)}>
               <HiPlus size={16} /> New Task
             </button>
           )}
@@ -180,25 +164,16 @@ export default function TasksPage() {
 
       <div className="filter-bar">
         {["ALL", ...statusOptions].map((s) => (
-          <button
-            key={s}
-            className={`filter-btn ${filter === s ? "active" : ""}`}
-            onClick={() => setFilter(s)}
-          >
+          <button key={s} className={`filter-btn ${filter === s ? "active" : ""}`} onClick={() => setFilter(s)}>
             {s.replace(/_/g, " ")}
           </button>
         ))}
       </div>
 
       {loading ? (
-        <div className="loading-center">
-          <span className="spinner lg" />
-        </div>
+        <div className="loading-center"><span className="spinner lg" /></div>
       ) : filtered.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-icon">📭</div>
-          <p>No tasks found</p>
-        </div>
+        <div className="empty-state"><div className="empty-icon">📭</div><p>No tasks found</p></div>
       ) : (
         <div className="tasks-grid">
           {filtered.map((task) => (
@@ -207,56 +182,45 @@ export default function TasksPage() {
               task={task}
               isAdmin={isAdmin}
               isSuperAdmin={isSuperAdmin}
-              canEdit={isAdmin || canEmployeeEdit(task)}
-              department={isAdmin ? getDeptForEmployee(task.assignedTo?._id || task.assignedTo) : null}
-              onUpdate={() => {
-                setSelectedTask(task);
-                setShowUpdateModal(true);
-              }}
+              isEmployee={isEmployee}
+              currentUserId={user?._id}
+              myEntry={myAssigneeEntry(task)}
+              department={isAdmin ? getDept(task) : null}
+              onUpdate={() => { setSelectedTask(task); setShowUpdate(true); }}
               onDelete={() => handleDelete(task._id)}
               onViewLogs={() => openLogs(task)}
+              onMyProgress={() => { setSelectedTask(task); setShowMyProgress(true); }}
             />
           ))}
         </div>
       )}
 
-      {showCreateModal && (
+      {showCreate && (
         <CreateTaskModal
-          employees={employees}
-          departments={departments}
-          onClose={() => setShowCreateModal(false)}
-          onCreated={fetchTasks}
+          employees={employees} departments={departments}
+          onClose={() => setShowCreate(false)} onCreated={fetchTasks}
         />
       )}
-
-      {showUpdateModal && selectedTask && (
+      {showUpdate && selectedTask && (
         <UpdateTaskModal
-          task={selectedTask}
-          isAdmin={isAdmin}
-          departments={departments}
-          employees={employees}
-          onClose={() => {
-            setShowUpdateModal(false);
-            setSelectedTask(null);
-          }}
+          task={selectedTask} departments={departments} employees={employees}
+          onClose={() => { setShowUpdate(false); setSelectedTask(null); }}
           onUpdated={fetchTasks}
         />
       )}
-
-      {showLogsModal && selectedTask && (
+      {showMyProgress && selectedTask && (
+        <MyProgressModal
+          task={selectedTask} currentUserId={user?._id}
+          onClose={() => { setShowMyProgress(false); setSelectedTask(null); }}
+          onUpdated={fetchTasks}
+        />
+      )}
+      {showLogs && selectedTask && (
         <LogsModal
-          task={selectedTask}
-          logs={logs}
-          loading={logsLoading}
-          canAddLog={isEmployee}
-          onClose={() => {
-            setShowLogsModal(false);
-            setSelectedTask(null);
-          }}
-          onLogAdded={() => {
-            openLogs(selectedTask);
-            fetchTasks();
-          }}
+          task={selectedTask} logs={logs} loading={logsLoading}
+          canAddLog={isEmployee && !!myAssigneeEntry(selectedTask)}
+          onClose={() => { setShowLogs(false); setSelectedTask(null); }}
+          onLogAdded={() => { openLogs(selectedTask); fetchTasks(); }}
         />
       )}
     </div>
@@ -264,97 +228,135 @@ export default function TasksPage() {
 }
 
 // ─── Task Card ────────────────────────────────────────────────────────────────
-// • SUPER_ADMIN  → dept chip + assigned to + assigned by
-// • ADMIN        → dept chip + assigned to
-// • EMPLOYEE     → assigned by only
-function TaskCard({ task, isAdmin, isSuperAdmin, canEdit, department, onUpdate, onDelete, onViewLogs }) {
+function TaskCard({ task, isAdmin, isSuperAdmin, isEmployee, currentUserId, myEntry,
+  department, onUpdate, onDelete, onViewLogs, onMyProgress }) {
+
+  const [expanded, setExpanded] = useState(false);
+  const assigneeCount = task.assignees?.length ?? 0;
+
   return (
     <div className="task-card">
-      <div
-        className={`task-card-stripe stripe-${task.status
-          ?.toLowerCase()
-          .replace(/_/g, "-")}`}
-      />
+      {/* Left stripe uses overall status */}
+      <div className={`task-card-stripe stripe-${task.overallStatus?.toLowerCase().replace(/_/g, "-")}`} />
 
       <div className="task-card-header">
         <div className="task-card-badges">
-          <span className={`badge ${statusColors[task.status]}`}>
-            {task.status?.replace(/_/g, " ")}
+          <span className={`badge ${statusColors[task.overallStatus]}`}>
+            {task.overallStatus?.replace(/_/g, " ")}
           </span>
-          <span className={`pri ${priorityColors[task.priority]}`}>
-            {task.priority}
-          </span>
+          <span className={`pri ${priorityColors[task.priority]}`}>{task.priority}</span>
         </div>
-
         <div className="task-card-actions">
-          <button className="icon-btn" title="View Logs" onClick={onViewLogs}>
-            <HiClipboardList size={15} />
-          </button>
-          {canEdit && (
-            <button className="icon-btn" title="Edit" onClick={onUpdate}>
-              <HiPencil size={15} />
-            </button>
+          <button className="icon-btn" title="View Logs" onClick={onViewLogs}><HiClipboardList size={15} /></button>
+          {isAdmin && (
+            <button className="icon-btn" title="Edit Task" onClick={onUpdate}><HiPencil size={15} /></button>
+          )}
+          {isEmployee && myEntry && (
+            <button className="icon-btn" title="Update My Progress" onClick={onMyProgress}><HiPencil size={15} /></button>
           )}
           {isAdmin && (
-            <button className="icon-btn danger" title="Delete" onClick={onDelete}>
-              <HiTrash size={15} />
-            </button>
+            <button className="icon-btn danger" title="Delete" onClick={onDelete}><HiTrash size={15} /></button>
           )}
         </div>
       </div>
 
       <h3 className="task-card-title">{task.title}</h3>
-      {task.description && (
-        <p className="task-card-desc">{task.description}</p>
-      )}
+      {task.description && <p className="task-card-desc">{task.description}</p>}
 
+      {/* ── Overall Progress ── */}
       <div className="task-progress-wrap">
         <div className="progress-label">
-          <span className="text-muted text-sm">Progress</span>
-          <span className="text-sm font-medium">{task.progress}%</span>
+          <span className="text-muted text-sm">Overall Progress</span>
+          <span className="text-sm font-medium">{task.overallProgress}%</span>
         </div>
         <div className="progress-bar">
           <div
-            className={`progress-fill ${
-              task.progress === 100
-                ? "fill-done"
-                : task.progress > 50
-                ? "fill-mid"
-                : "fill-low"
-            }`}
-            style={{ width: `${task.progress}%` }}
+            className={`progress-fill ${progressFillClass(task.overallProgress)}`}
+            style={{ width: `${task.overallProgress}%` }}
           />
         </div>
       </div>
 
+      {/* ── Per-Assignee Rows ── */}
+      {assigneeCount > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <button
+            onClick={() => setExpanded((p) => !p)}
+            style={{
+              display: "flex", alignItems: "center", gap: 5,
+              background: "none", border: "none", cursor: "pointer",
+              color: "var(--text-3)", fontSize: 12, fontWeight: 600, padding: "2px 0",
+            }}
+          >
+            <HiUsers size={13} />
+            {assigneeCount} assignee{assigneeCount !== 1 ? "s" : ""}
+            {expanded ? <HiChevronUp size={12} /> : <HiChevronDown size={12} />}
+          </button>
+
+          {expanded && (
+            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 10 }}>
+              {task.assignees.map((a, i) => {
+                const empId   = a.user?._id || a.user;
+                const empName = a.user?.name || "Employee";
+                const isMe    = isEmployee && empId === currentUserId;
+                return (
+                  <div key={i} style={{
+                    background: isMe ? "var(--accent-bg, rgba(99,102,241,.06))" : "var(--bg2)",
+                    border: `1px solid ${isMe ? "var(--accent-bg2, rgba(99,102,241,.18))" : "var(--border)"}`,
+                    borderRadius: 8, padding: "8px 10px",
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, color: "var(--text)" }}>
+                        <span style={{
+                          width: 7, height: 7, borderRadius: "50%",
+                          background: statusDot[a.status] || "#888",
+                          display: "inline-block", flexShrink: 0,
+                        }} />
+                        {empName}
+                        {isMe && <span style={{ fontSize: 10, color: "var(--accent-text, #6366f1)", fontWeight: 700 }}>(you)</span>}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span className={`badge ${statusColors[a.status]}`} style={{ fontSize: 10, padding: "1px 6px" }}>
+                          {a.status?.replace(/_/g, " ")}
+                        </span>
+                        <span style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 600 }}>{a.progress}%</span>
+                      </div>
+                    </div>
+                    <div className="progress-bar" style={{ height: 4 }}>
+                      <div
+                        className={`progress-fill ${progressFillClass(a.progress)}`}
+                        style={{ width: `${a.progress}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="task-card-footer">
-        <div className="text-sm text-muted" />
+        <div />
         <div className="text-sm text-muted" style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <HiCalendarDays size={13} />
-          {task.deadline
-            ? new Date(task.deadline).toLocaleDateString()
-            : "No deadline"}
+          {task.deadline ? new Date(task.deadline).toLocaleDateString() : "No deadline"}
         </div>
       </div>
 
-      {/* ── Admin / Super Admin info ── */}
+      {/* Admin meta */}
       {isAdmin && (
         <div className="task-card-meta">
-          {/* Department chip */}
           {department ? (
             <span className="dept-chip"><HiBuildingOffice2 size={12} /> {department.name}</span>
           ) : (
             <span className="dept-chip dept-chip-none"><HiBuildingOffice2 size={12} /> No department</span>
           )}
-
-          {/* Assigned to */}
-          {task.assignedTo?.name && (
+          {task.assignees?.length > 0 && (
             <div className="task-assigned-to text-sm text-muted">
-              <HiUser size={13} /> Assigned to: {task.assignedTo.name}
+              <HiUser size={13} /> {task.assignees.map((a) => a.user?.name || "?").join(", ")}
             </div>
           )}
-
-          {/* Assigned by — Super Admin only */}
           {isSuperAdmin && task.assignedBy?.name && (
             <div className="task-assigned-by text-sm text-muted">
               <HiShieldCheck size={13} /> Assigned by: {task.assignedBy.name}
@@ -363,9 +365,9 @@ function TaskCard({ task, isAdmin, isSuperAdmin, canEdit, department, onUpdate, 
         </div>
       )}
 
-      {/* ── Employee info: who assigned the task ── */}
-      {!isAdmin && task.assignedBy?.name && (
-        <div className="task-assigned-by text-sm text-muted">
+      {/* Employee meta */}
+      {isEmployee && task.assignedBy?.name && (
+        <div className="task-assigned-by text-sm text-muted" style={{ marginTop: 8 }}>
           <HiUser size={13} /> Assigned by: {task.assignedBy.name}
         </div>
       )}
@@ -373,45 +375,82 @@ function TaskCard({ task, isAdmin, isSuperAdmin, canEdit, department, onUpdate, 
   );
 }
 
-// ─── Create Task Modal ────────────────────────────────────────────────────────
-function CreateTaskModal({ employees, departments, onClose, onCreated }) {
-  const [selectedDept, setSelectedDept] = useState("");
-  const [form, setForm] = useState({
-    title: "",
-    description: "",
-    assignedTo: "",
-    priority: "MEDIUM",
-    deadline: "",
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  // Filter employees by selected department
-  const filteredEmployees = selectedDept
+// ─── Checkbox Employee Picker ──────────────────────────────────────────────────
+function EmployeePicker({ employees, departments, selected, onChange }) {
+  const [deptFilter, setDeptFilter] = useState("");
+  const visible = deptFilter
     ? employees.filter((e) => {
-        const dept = departments.find((d) => d._id === selectedDept);
+        const dept = departments.find((d) => d._id === deptFilter);
         return dept?.members?.some((m) => (m._id || m) === e._id);
       })
     : employees;
 
-  const handleDeptChange = (deptId) => {
-    setSelectedDept(deptId);
-    setForm((prev) => ({ ...prev, assignedTo: "" }));
-  };
+  const toggle = (id) =>
+    onChange(selected.includes(id) ? selected.filter((x) => x !== id) : [...selected, id]);
+
+  return (
+    <div>
+      <select
+        value={deptFilter}
+        onChange={(e) => setDeptFilter(e.target.value)}
+        style={{ width: "100%", marginBottom: 8 }}
+      >
+        <option value="">All employees</option>
+        {departments.map((d) => (
+          <option key={d._id} value={d._id}>{d.name} ({d.members?.length || 0})</option>
+        ))}
+      </select>
+
+      <div style={{
+        border: "1px solid var(--border)", borderRadius: 8,
+        maxHeight: 170, overflowY: "auto", padding: "4px 0",
+      }}>
+        {visible.length === 0 ? (
+          <p style={{ padding: "8px 12px", fontSize: 12, color: "var(--text-3)" }}>No employees</p>
+        ) : visible.map((u) => {
+          const checked = selected.includes(u._id);
+          return (
+            <label key={u._id} style={{
+              display: "flex", alignItems: "center", gap: 8, padding: "6px 12px",
+              cursor: "pointer",
+              background: checked ? "var(--accent-bg, rgba(99,102,241,.07))" : "transparent",
+              transition: "background .12s",
+            }}>
+              <input
+                type="checkbox" checked={checked} onChange={() => toggle(u._id)}
+                style={{ accentColor: "var(--primary)", width: 14, height: 14 }}
+              />
+              <span style={{ fontSize: 13 }}>
+                {u.name} <span style={{ color: "var(--text-3)" }}>({u.email})</span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+      <p style={{ fontSize: 11, color: "var(--text-3)", marginTop: 5 }}>
+        {selected.length} employee{selected.length !== 1 ? "s" : ""} selected
+      </p>
+    </div>
+  );
+}
+
+// ─── Create Task Modal ─────────────────────────────────────────────────────────
+function CreateTaskModal({ employees, departments, onClose, onCreated }) {
+  const [form, setForm] = useState({ title: "", description: "", priority: "MEDIUM", deadline: "" });
+  const [selected, setSelected] = useState([]);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError("");
+    if (selected.length === 0) { setError("Please select at least one employee"); return; }
+    setLoading(true); setError("");
     try {
-      await api.post("/tasks", form);
-      onCreated();
-      onClose();
+      await api.post("/tasks", { ...form, assignedTo: selected });
+      onCreated(); onClose();
     } catch (err) {
       setError(err.response?.data?.message || "Error creating task");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   return (
@@ -426,85 +465,32 @@ function CreateTaskModal({ employees, departments, onClose, onCreated }) {
 
           <div className="form-group">
             <label>Title *</label>
-            <input
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-              placeholder="Task title"
-              required
-            />
+            <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })}
+              placeholder="Task title" required />
           </div>
-
           <div className="form-group">
             <label>Description</label>
-            <textarea
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              placeholder="Task description"
-              rows={2}
-            />
+            <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
+              placeholder="Task description" rows={2} />
           </div>
-
           <div className="form-group">
-            <label>Filter by Department</label>
-            <select
-              value={selectedDept}
-              onChange={(e) => handleDeptChange(e.target.value)}
-            >
-              <option value="">All employees</option>
-              {departments.map((d) => (
-                <option key={d._id} value={d._id}>
-                  {d.name} ({d.members?.length || 0} members)
-                </option>
-              ))}
-            </select>
+            <label>Assign To * <span style={{ fontWeight: 400, fontSize: 12, color: "var(--text-3)" }}>(select one or more)</span></label>
+            <EmployeePicker employees={employees} departments={departments} selected={selected} onChange={setSelected} />
           </div>
-
           <div className="form-row">
             <div className="form-group">
-              <label>Assign To *</label>
-              <select
-                value={form.assignedTo}
-                onChange={(e) => setForm({ ...form, assignedTo: e.target.value })}
-                required
-              >
-                <option value="">
-                  {filteredEmployees.length === 0 && selectedDept
-                    ? "No employees in this department"
-                    : "Select employee"}
-                </option>
-                {filteredEmployees.map((u) => (
-                  <option key={u._id} value={u._id}>
-                    {u.name} ({u.email})
-                  </option>
-                ))}
+              <label>Priority</label>
+              <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+                {priorityOptions.map((p) => <option key={p}>{p}</option>)}
               </select>
             </div>
             <div className="form-group">
-              <label>Priority</label>
-              <select
-                value={form.priority}
-                onChange={(e) => setForm({ ...form, priority: e.target.value })}
-              >
-                {priorityOptions.map((p) => (
-                  <option key={p}>{p}</option>
-                ))}
-              </select>
+              <label>Deadline</label>
+              <input type="date" value={form.deadline} onChange={(e) => setForm({ ...form, deadline: e.target.value })} />
             </div>
           </div>
-
-          <div className="form-group">
-            <label>Deadline</label>
-            <input
-              type="date"
-              value={form.deadline}
-              onChange={(e) => setForm({ ...form, deadline: e.target.value })}
-            />
-          </div>
-
           <div className="modal-footer">
-            <button type="button" className="btn btn-ghost" onClick={onClose}>
-              Cancel
-            </button>
+            <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn btn-primary" disabled={loading}>
               {loading ? <span className="spinner" /> : "Create Task"}
             </button>
@@ -515,194 +501,98 @@ function CreateTaskModal({ employees, departments, onClose, onCreated }) {
   );
 }
 
-// ─── Update Task Modal ────────────────────────────────────────────────────────
-function UpdateTaskModal({ task, isAdmin, departments, employees, onClose, onUpdated }) {
-  const assignedId = task.assignedTo?._id || task.assignedTo || "";
+// ─── Update Task Modal (Admin) ─────────────────────────────────────────────────
+function UpdateTaskModal({ task, departments, employees, onClose, onUpdated }) {
+  const existingIds = task.assignees?.map((a) => a.user?._id || a.user) || [];
 
-  // Pre-select the dept the current assignee belongs to
-  const currentDept = departments?.find((d) =>
-    d.members?.some((m) => (m._id || m) === assignedId)
-  );
-
-  const [selectedDept, setSelectedDept] = useState(currentDept?._id || "");
   const [form, setForm] = useState({
     title: task.title,
     description: task.description || "",
-    status: task.status,
+    overallStatus: task.overallStatus,
+    overallProgress: task.overallProgress,
     priority: task.priority,
-    progress: task.progress,
     deadline: task.deadline ? task.deadline.split("T")[0] : "",
-    assignedTo: assignedId,
   });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  // Filter employees by selected dept, or show all
-  const filteredEmployees = selectedDept
-    ? (employees || []).filter((e) => {
-        const dept = departments.find((d) => d._id === selectedDept);
-        return dept?.members?.some((m) => (m._id || m) === e._id);
-      })
-    : (employees || []);
-
-  const handleDeptChange = (deptId) => {
-    setSelectedDept(deptId);
-    setForm((prev) => ({ ...prev, assignedTo: "" }));
-  };
+  const [selected, setSelected] = useState(existingIds);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError("");
+    if (selected.length === 0) { setError("Please select at least one employee"); return; }
+    setLoading(true); setError("");
     try {
-      await api.put(`/tasks/${task._id}`, form);
-      onUpdated();
-      onClose();
+      await api.put(`/tasks/${task._id}`, { ...form, assignedTo: selected });
+      onUpdated(); onClose();
     } catch (err) {
       setError(err.response?.data?.message || "Error updating task");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>{isAdmin ? "Edit Task" : "Update My Progress"}</h2>
+          <h2>Edit Task</h2>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
         <form onSubmit={handleSubmit}>
           {error && <div className="alert alert-error">{error}</div>}
 
-          {isAdmin && (
-            <>
-              <div className="form-group">
-                <label>Title</label>
-                <input
-                  value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Description</label>
-                <textarea
-                  value={form.description}
-                  onChange={(e) =>
-                    setForm({ ...form, description: e.target.value })
-                  }
-                  rows={3}
-                />
-              </div>
-
-              <div className="form-group">
-                <label>Department</label>
-                <select
-                  value={selectedDept}
-                  onChange={(e) => handleDeptChange(e.target.value)}
-                >
-                  <option value="">All employees</option>
-                  {departments.map((d) => (
-                    <option key={d._id} value={d._id}>
-                      {d.name} ({d.members?.length || 0} members)
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>Assigned To</label>
-                <select
-                  value={form.assignedTo}
-                  onChange={(e) => setForm({ ...form, assignedTo: e.target.value })}
-                  required
-                >
-                  <option value="">
-                    {filteredEmployees.length === 0 && selectedDept
-                      ? "No employees in this department"
-                      : "Select employee"}
-                  </option>
-                  {filteredEmployees.map((u) => (
-                    <option key={u._id} value={u._id}>
-                      {u.name} ({u.email})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </>
-          )}
-
-          <div className={isAdmin ? "form-row" : ""}>
-            <div className="form-group">
-              <label>Status</label>
-              <select
-                value={form.status}
-                onChange={(e) => setForm({ ...form, status: e.target.value })}
-              >
-                {statusOptions.map((s) => (
-                  <option key={s}>{s}</option>
-                ))}
-              </select>
-            </div>
-
-            {isAdmin && (
-              <div className="form-group">
-                <label>Priority</label>
-                <select
-                  value={form.priority}
-                  onChange={(e) =>
-                    setForm({ ...form, priority: e.target.value })
-                  }
-                >
-                  {priorityOptions.map((p) => (
-                    <option key={p}>{p}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+          <div className="form-group">
+            <label>Title</label>
+            <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
+          </div>
+          <div className="form-group">
+            <label>Description</label>
+            <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} />
           </div>
 
-          {!isAdmin && (
-            <div className="form-group">
-              <label>Progress: {form.progress}%</label>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={form.progress}
-                onChange={(e) =>
-                  setForm({ ...form, progress: +e.target.value })
-                }
-              />
-            </div>
-          )}
+          <div className="form-group">
+            <label>Assignees <span style={{ fontWeight: 400, fontSize: 12, color: "var(--text-3)" }}>(existing progress is preserved)</span></label>
+            <EmployeePicker employees={employees} departments={departments} selected={selected} onChange={setSelected} />
+          </div>
 
-          {isAdmin && (
+          {/* Overall fields */}
+          <div style={{
+            background: "var(--bg2)", border: "1px solid var(--border)",
+            borderRadius: 10, padding: "14px 14px 10px", marginBottom: 14,
+          }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-3)", marginBottom: 10, textTransform: "uppercase", letterSpacing: ".04em" }}>
+              Overall Task Status
+            </p>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Overall Status</label>
+                <select value={form.overallStatus} onChange={(e) => setForm({ ...form, overallStatus: e.target.value })}>
+                  {statusOptions.map((s) => <option key={s}>{s}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Overall Progress: {form.overallProgress}%</label>
+                <input type="range" min={0} max={100} value={form.overallProgress}
+                  onChange={(e) => setForm({ ...form, overallProgress: +e.target.value })} />
+              </div>
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Priority</label>
+              <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+                {priorityOptions.map((p) => <option key={p}>{p}</option>)}
+              </select>
+            </div>
             <div className="form-group">
               <label>Deadline</label>
-              <input
-                type="date"
-                value={form.deadline}
-                onChange={(e) =>
-                  setForm({ ...form, deadline: e.target.value })
-                }
-              />
+              <input type="date" value={form.deadline} onChange={(e) => setForm({ ...form, deadline: e.target.value })} />
             </div>
-          )}
+          </div>
 
           <div className="modal-footer">
-            <button type="button" className="btn btn-ghost" onClick={onClose}>
-              Cancel
-            </button>
+            <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn btn-primary" disabled={loading}>
-              {loading ? (
-                <span className="spinner" />
-              ) : isAdmin ? (
-                "Save Changes"
-              ) : (
-                "Update Progress"
-              )}
+              {loading ? <span className="spinner" /> : "Save Changes"}
             </button>
           </div>
         </form>
@@ -711,14 +601,101 @@ function UpdateTaskModal({ task, isAdmin, departments, employees, onClose, onUpd
   );
 }
 
-// ─── Logs Modal ───────────────────────────────────────────────────────────────
-function LogsModal({ task, logs, loading, canAddLog, onClose, onLogAdded }) {
-  const [logForm, setLogForm] = useState({
-    message: "",
-    progress: task.progress,
-    status: task.status,
-    taskId: task._id,
+// ─── My Progress Modal (Employee) ─────────────────────────────────────────────
+function MyProgressModal({ task, currentUserId, onClose, onUpdated }) {
+  const myEntry = task.assignees?.find((a) => (a.user?._id || a.user) === currentUserId);
+  const [form, setForm] = useState({
+    status: myEntry?.status || "PENDING",
+    progress: myEntry?.progress ?? 0,
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true); setError("");
+    try {
+      await api.patch(`/tasks/${task._id}/my-progress`, form);
+      onUpdated(); onClose();
+    } catch (err) {
+      setError(err.response?.data?.message || "Error updating progress");
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>My Progress<span className="modal-subtitle"> — {task.title}</span></h2>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          {error && <div className="alert alert-error">{error}</div>}
+
+          <div className="form-group">
+            <label>My Status</label>
+            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              {statusOptions.map((s) => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>My Progress: {form.progress}%</label>
+            <input type="range" min={0} max={100} value={form.progress}
+              onChange={(e) => setForm({ ...form, progress: +e.target.value })} />
+            <div className="progress-bar" style={{ marginTop: 6 }}>
+              <div className={`progress-fill ${progressFillClass(form.progress)}`} style={{ width: `${form.progress}%` }} />
+            </div>
+          </div>
+
+          {/* Show other assignees (read-only) */}
+          {task.assignees?.length > 1 && (
+            <div style={{ marginBottom: 16 }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".04em" }}>
+                Other Assignees
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                {task.assignees
+                  .filter((a) => (a.user?._id || a.user) !== currentUserId)
+                  .map((a, i) => (
+                    <div key={i} style={{
+                      background: "var(--bg2)", border: "1px solid var(--border)",
+                      borderRadius: 8, padding: "7px 10px",
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>
+                          {a.user?.name || "Employee"}
+                        </span>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                          <span className={`badge ${statusColors[a.status]}`} style={{ fontSize: 10, padding: "1px 6px" }}>
+                            {a.status?.replace(/_/g, " ")}
+                          </span>
+                          <span style={{ fontSize: 11, color: "var(--text-3)" }}>{a.progress}%</span>
+                        </div>
+                      </div>
+                      <div className="progress-bar" style={{ height: 4 }}>
+                        <div className={`progress-fill ${progressFillClass(a.progress)}`} style={{ width: `${a.progress}%` }} />
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          <div className="modal-footer">
+            <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? <span className="spinner" /> : "Save My Progress"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Logs Modal ────────────────────────────────────────────────────────────────
+function LogsModal({ task, logs, loading, canAddLog, onClose, onLogAdded }) {
+  const [logForm, setLogForm] = useState({ message: "", progress: 0, status: "IN_PROGRESS", taskId: task._id });
   const [submitting, setSubmitting] = useState(false);
 
   const handleAddLog = async (e) => {
@@ -726,23 +703,18 @@ function LogsModal({ task, logs, loading, canAddLog, onClose, onLogAdded }) {
     setSubmitting(true);
     try {
       await api.post("/logs", logForm);
-      setLogForm((prev) => ({ ...prev, message: "" }));
+      setLogForm((p) => ({ ...p, message: "" }));
       onLogAdded();
     } catch (err) {
       alert(err.response?.data?.message || "Error adding log");
-    } finally {
-      setSubmitting(false);
-    }
+    } finally { setSubmitting(false); }
   };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>
-            Task Logs
-            <span className="modal-subtitle"> — {task.title}</span>
-          </h2>
+          <h2>Task Logs<span className="modal-subtitle"> — {task.title}</span></h2>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
 
@@ -750,55 +722,29 @@ function LogsModal({ task, logs, loading, canAddLog, onClose, onLogAdded }) {
           <form onSubmit={handleAddLog} className="log-form">
             <div className="form-group">
               <label>Add Update</label>
-              <textarea
-                value={logForm.message}
-                onChange={(e) =>
-                  setLogForm({ ...logForm, message: e.target.value })
-                }
-                placeholder="What did you work on?"
-                rows={2}
-                required
-              />
+              <textarea value={logForm.message} onChange={(e) => setLogForm({ ...logForm, message: e.target.value })}
+                placeholder="What did you work on?" rows={2} required />
             </div>
             <div className="form-row">
               <div className="form-group">
                 <label>Progress: {logForm.progress}%</label>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={logForm.progress}
-                  onChange={(e) =>
-                    setLogForm({ ...logForm, progress: +e.target.value })
-                  }
-                />
+                <input type="range" min={0} max={100} value={logForm.progress}
+                  onChange={(e) => setLogForm({ ...logForm, progress: +e.target.value })} />
               </div>
               <div className="form-group">
                 <label>Status</label>
-                <select
-                  value={logForm.status}
-                  onChange={(e) =>
-                    setLogForm({ ...logForm, status: e.target.value })
-                  }
-                >
-                  {statusOptions.map((s) => (
-                    <option key={s}>{s}</option>
-                  ))}
+                <select value={logForm.status} onChange={(e) => setLogForm({ ...logForm, status: e.target.value })}>
+                  {statusOptions.map((s) => <option key={s}>{s}</option>)}
                 </select>
               </div>
             </div>
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={submitting}
-            >
+            <button type="submit" className="btn btn-primary" disabled={submitting}>
               {submitting ? <span className="spinner" /> : "Add Log Entry"}
             </button>
           </form>
         ) : (
           <div className="logs-readonly-notice">
-            📋 Viewing logs as read-only. Only the assigned employee can add log
-            entries.
+            📋 Viewing logs as read-only. Only an assigned employee can add log entries.
           </div>
         )}
 
@@ -806,38 +752,28 @@ function LogsModal({ task, logs, loading, canAddLog, onClose, onLogAdded }) {
 
         <div className="logs-list">
           {loading ? (
-            <div className="loading-center">
-              <span className="spinner" />
-            </div>
+            <div className="loading-center"><span className="spinner" /></div>
           ) : logs.length === 0 ? (
             <p className="empty-msg">No log entries yet</p>
-          ) : (
-            logs.map((log) => (
-              <div key={log._id} className="log-entry">
-                <div className="log-meta">
-                  <span className="log-author" style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                    <HiUser size={13} /> {log.userId?.name || "Unknown"}
-                  </span>
-                  <span className="log-time">
-                    {new Date(log.createdAt).toLocaleString()}
-                  </span>
-                </div>
-                <p className="log-message">{log.message}</p>
-                <div className="log-badges">
-                  {log.status && (
-                    <span className={`badge ${statusColors[log.status]}`}>
-                      {log.status.replace(/_/g, " ")}
-                    </span>
-                  )}
-                  {log.progress !== undefined && (
-                    <span className="text-sm text-muted">
-                      Progress: {log.progress}%
-                    </span>
-                  )}
-                </div>
+          ) : logs.map((log) => (
+            <div key={log._id} className="log-entry">
+              <div className="log-meta">
+                <span className="log-author" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                  <HiUser size={13} /> {log.userId?.name || "Unknown"}
+                </span>
+                <span className="log-time">{new Date(log.createdAt).toLocaleString()}</span>
               </div>
-            ))
-          )}
+              <p className="log-message">{log.message}</p>
+              <div className="log-badges">
+                {log.status && (
+                  <span className={`badge ${statusColors[log.status]}`}>{log.status.replace(/_/g, " ")}</span>
+                )}
+                {log.progress !== undefined && (
+                  <span className="text-sm text-muted">Progress: {log.progress}%</span>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

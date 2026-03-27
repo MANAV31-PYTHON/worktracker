@@ -70,12 +70,14 @@ export default function DashboardPage() {
 
   // Filter tasks by selected department
   const tasks = useMemo(() => {
-    if (selectedDept === "ALL" || !isAdmin) return allTasks;
-    return allTasks.filter(t => {
-      const assignedId = t.assignedTo?._id || t.assignedTo;
-      return userDeptMap[assignedId]?.includes(selectedDept);
-    });
-  }, [allTasks, selectedDept, userDeptMap, isAdmin]);
+  if (selectedDept === "ALL" || !isAdmin) return allTasks;
+
+  return allTasks.filter(t =>
+    t.assignees?.some(a =>
+      userDeptMap[a.user?._id || a.user]?.includes(selectedDept)
+    )
+  );
+}, [allTasks, selectedDept, userDeptMap, isAdmin]);
 
   // Selected dept info
   const activeDept = depts.find(d => d._id === selectedDept);
@@ -83,15 +85,15 @@ export default function DashboardPage() {
   // Stats (all based on filtered tasks)
   const stats = useMemo(() => ({
     total:      tasks.length,
-    pending:    tasks.filter(t => t.status === "PENDING").length,
-    inProgress: tasks.filter(t => t.status === "IN_PROGRESS").length,
-    completed:  tasks.filter(t => t.status === "COMPLETED").length,
-    blocked:    tasks.filter(t => t.status === "BLOCKED").length,
+    pending:    tasks.filter(t => t.overallStatus === "PENDING").length,
+    inProgress: tasks.filter(t => t.overallStatus === "IN_PROGRESS").length,
+    completed:  tasks.filter(t => t.overallStatus === "COMPLETED").length,
+    blocked:    tasks.filter(t => t.overallStatus === "BLOCKED").length,
   }), [tasks]);
 
   const completionRate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
   const avgProgress    = tasks.length > 0
-    ? Math.round(tasks.reduce((s, t) => s + (t.progress || 0), 0) / tasks.length) : 0;
+    ? Math.round(tasks.reduce((s, t) => s + (t.overallProgress || 0), 0) / tasks.length) : 0;
 
   const pieData = [
     { name:"Pending",     value: stats.pending    },
@@ -108,10 +110,11 @@ export default function DashboardPage() {
   const deptData = depts.slice(0, 6).map(d => ({
     name: d.name.length > 12 ? d.name.slice(0,12)+"…" : d.name,
     members: d.members?.length || 0,
-    tasks: allTasks.filter(t => {
-      const id = t.assignedTo?._id || t.assignedTo;
-      return userDeptMap[id]?.includes(d._id);
-    }).length,
+    tasks: allTasks.filter(t =>
+  t.assignees?.some(a =>
+    userDeptMap[a.user?._id || a.user]?.includes(d._id)
+  )
+).length,
   }));
 
   const recentTasks = [...tasks]
@@ -158,10 +161,11 @@ export default function DashboardPage() {
                 <span className="dept-pill-count">{allTasks.length}</span>
               </button>
               {depts.map(d => {
-                const deptTaskCount = allTasks.filter(t => {
-                  const id = t.assignedTo?._id || t.assignedTo;
-                  return userDeptMap[id]?.includes(d._id);
-                }).length;
+                const deptTaskCount = allTasks.filter(t =>
+                  t.assignees?.some(a =>
+                    userDeptMap[a.user?._id || a.user]?.includes(d._id)
+                  )
+                ).length;
                 return (
                   <button
                     key={d._id}
@@ -298,7 +302,7 @@ export default function DashboardPage() {
               <div key={task._id} className="task-row" style={{ animationDelay:`${i*40}ms` }}>
                 <div style={{
                   width:4, height:36, borderRadius:2, flexShrink:0,
-                  background: STATUS_COLORS[task.status] || "var(--border2)"
+                  background: STATUS_COLORS[task.overallStatus] || "var(--border2)"
                 }} />
                 <div className="task-info">
                   <p className="task-title">{task.title}</p>
@@ -307,16 +311,16 @@ export default function DashboardPage() {
                   </p>
                 </div>
                 <div className="task-meta">
-                  <span className={`badge badge-${task.status?.toLowerCase().replace(/_/g,"-")}`} style={{ fontSize:10 }}>
-                    {task.status?.replace(/_/g," ")}
+                  <span className={`badge badge-${task.overallStatus?.toLowerCase().replace(/_/g,"-")}`} style={{ fontSize:10 }}>
+                    {task.overallStatus?.replace(/_/g," ")}
                   </span>
                   <div style={{
                     width:36, height:36, borderRadius:"50%",
-                    background:`conic-gradient(${STATUS_COLORS[task.status]} ${task.progress*3.6}deg, var(--bg4) 0deg)`,
+                    background:`conic-gradient(${STATUS_COLORS[task.overallStatus]} ${task.overallProgress*3.6}deg, var(--bg4) 0deg)`,
                     display:"flex", alignItems:"center", justifyContent:"center",
                   }}>
                     <div style={{ width:26, height:26, borderRadius:"50%", background:"var(--bg2)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:9, fontWeight:700, color:"var(--text-2)" }}>
-                      {task.progress}%
+                      {task.overallProgress}%
                     </div>
                   </div>
                 </div>
@@ -381,15 +385,15 @@ export default function DashboardPage() {
             <div key={task._id} className="progress-item">
               <div className="progress-label">
                 <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                  <span style={{ width:8, height:8, borderRadius:"50%", background:STATUS_COLORS[task.status], flexShrink:0 }} />
+                  <span style={{ width:8, height:8, borderRadius:"50%", background:STATUS_COLORS[task.overallStatus], flexShrink:0 }} />
                   <span>{task.title.length > 40 ? task.title.slice(0,40)+"…" : task.title}</span>
                 </div>
-                <span className="font-mono" style={{ fontSize:12, color:"var(--text-2)", fontWeight:700 }}>{task.progress}%</span>
+                <span className="font-mono" style={{ fontSize:12, color:"var(--text-2)", fontWeight:700 }}>{task.overallProgress}%</span>
               </div>
               <div className="progress-bar">
                 <div
-                  className={`progress-fill ${task.progress===100?"fill-done":task.progress>60?"fill-mid":task.progress>30?"fill-low":"fill-red"}`}
-                  style={{ width:`${task.progress}%` }}
+                  className={`progress-fill ${task.overallProgress===100?"fill-done":task.overallProgress>60?"fill-mid":task.overallProgress>30?"fill-low":"fill-red"}`}
+                  style={{ width:`${task.overallProgress}%` }}
                 />
               </div>
             </div>
