@@ -29,12 +29,12 @@ export const createUser = async (data, currentUser) => {
       throw new Error("User already exists");
     }
 
-  const hashedPassword = await bcrypt.hash(password, 10);
+  // const hashedPassword = await bcrypt.hash(password, 10);
 
   const user = await User.create({
     name,
     email,
-    password: hashedPassword,
+    password,
     role: role || "EMPLOYEE",
     createdBy: currentUser.id,
   });
@@ -172,7 +172,8 @@ export const resetPassword = async (token, newPassword) => {
       throw new Error("Invalid or expired token");
     }
 
-    user.password = newPassword;
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
 
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;

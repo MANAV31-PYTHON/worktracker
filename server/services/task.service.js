@@ -1,5 +1,18 @@
+/**
+ * task.service.js — WorkTrack
+ *
+ * Single source of truth for ALL notifications and emails.
+ * taskLog.service.js only writes to DB — no side-effects there.
+ *
+ * Notification matrix (updateMyProgress):
+ *   Co-assignees    → socket + email  (significant change only, skip actor)
+ *   Assigning admin → socket + email  (exactly once)
+ *   Super admins    → socket always   (email only on full task completion)
+ */
+
 import Task from "../models/task.model.js";
 import User from "../models/user.model.js";
+import { shouldSendUpdate } from "../utils/notificationHelper.js";
 import { createLog } from "./taskLog.service.js";
 import { sendNotification, sendNotificationToRole } from "../sockets/socket.js";
 import {
@@ -11,39 +24,44 @@ import {
   sendTaskDeletedToAdmin,
 } from "../emails/mailer.js";
 
-const calculateOverall = (assignees) => {
-  if (!assignees || assignees.length === 0) {
-    return { overallProgress: 0, overallStatus: "PENDING" };
-  }
+// ─────────────────────────────────────────────────────────────────
+// Shared helpers
+// ─────────────────────────────────────────────────────────────────
 
-  const total = assignees.reduce((sum, a) => sum + (a.progress || 0), 0);
-  const avg = Math.round(total / assignees.length);
-
-  let status = "PENDING";
-
-  if (assignees.every(a => a.status === "COMPLETED")) {
-    status = "COMPLETED";
-  } else if (assignees.some(a => a.status === "IN_PROGRESS")) {
-    status = "IN_PROGRESS";
-  } else if (assignees.some(a => a.status === "BLOCKED")) {
-    status = "BLOCKED";
-  }
-
-  return {
-    overallProgress: avg,
-    overallStatus: status
-  };
-};
-
-// Populate helper
 const POPULATE = [
   { path: "assignees.user", select: "name email" },
-  { path: "assignedBy", select: "name email" },
+  { path: "assignedBy",     select: "name email" },
 ];
 
-// ─────────────────────────────────────────────────────────────────────────────
+const getPopulated = (taskId) => Task.findById(taskId).populate(POPULATE);
+
+const calculateOverall = (assignees) => {
+  if (!assignees?.length) return { overallProgress: 0, overallStatus: "PENDING" };
+  const total = assignees.reduce((sum, a) => sum + (Number(a.progress) || 0), 0);
+  const avg   = Math.round(total / assignees.length);
+  let status  = "PENDING";
+  if      (assignees.every((a) => a.status === "COMPLETED"))   status = "COMPLETED";
+  else if (assignees.some ((a) => a.status === "IN_PROGRESS")) status = "IN_PROGRESS";
+  else if (assignees.some ((a) => a.status === "BLOCKED"))     status = "BLOCKED";
+  return { overallProgress: avg, overallStatus: status };
+};
+
+/**
+ * Safe plain-object for mailer/templates.
+ * Mongoose documents and plain objects both work.
+ */
+const toPayload = (doc) => ({
+  title:           doc.title,
+  description:     doc.description,
+  priority:        doc.priority,
+  deadline:        doc.deadline,
+  overallStatus:   doc.overallStatus,
+  overallProgress: doc.overallProgress,
+});
+
+// ─────────────────────────────────────────────────────────────────
 // CREATE TASK
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
 export const createTask = async (data, currentUser) => {
   const { title, description, assignedTo, priority, deadline } = data;
 
@@ -52,51 +70,41 @@ export const createTask = async (data, currentUser) => {
     throw new Error("Not authorized to assign tasks");
 
   const ids = Array.isArray(assignedTo) ? assignedTo : [assignedTo];
-  if (ids.length === 0) throw new Error("At least one employee must be assigned");
+  if (!ids.length) throw new Error("At least one employee must be assigned");
 
   const employees = await User.find({ _id: { $in: ids } });
   if (employees.length !== ids.length) throw new Error("One or more employees not found");
   if (employees.some((e) => e.role !== "EMPLOYEE"))
     throw new Error("Tasks can only be assigned to employees");
 
-  const assignees = ids.map((id) => ({
-      user: id,
-      status: "PENDING",
-      progress: 0,
-    }));
+  const assignees = ids.map((id) => ({ user: id, status: "PENDING", progress: 0 }));
+  const { overallProgress, overallStatus } = calculateOverall(assignees);
 
-    // ✅ calculate first
-    const { overallProgress, overallStatus } = calculateOverall(assignees);
+  const task = await Task.create({
+    title, description, assignees,
+    assignedBy: currentUser.id,
+    priority:   priority || "MEDIUM",
+    deadline:   deadline || null,
+    overallStatus, overallProgress,
+  });
 
-    // ✅ then create task
-    const task = await Task.create({
-      title,
-      description,
-      assignees,
-      assignedBy: currentUser.id,
-      priority: priority || "MEDIUM",
-      deadline: deadline || null,
-      overallStatus,
-      overallProgress,
-    });
-
-  const populated = await Task.findById(task._id).populate(POPULATE);
+  const populated      = await getPopulated(task._id);
   const assignedByName = populated.assignedBy?.name || "Admin";
-  const employeeNames  = populated.assignees.map((a) => a.user?.name).join(", ");
+  const employeeNames  = populated.assignees.map((a) => a.user?.name || "Employee").join(", ");
 
-  // 🔔 Notify each assignee
-  ids.forEach((id) => {
+  // Sockets
+  ids.forEach((id) =>
     sendNotification(id.toString(), "task_assigned", {
       message: `You have been assigned a new task: "${title}" by ${assignedByName}`,
-      task: populated,
-    });
-  });
+      task:    populated,
+    })
+  );
   sendNotificationToRole("SUPER_ADMIN", "task_assigned", {
     message: `${assignedByName} assigned "${title}" to ${employeeNames}`,
-    task: populated,
+    task:    populated,
   }, currentUser.id);
 
-  // 📧 Email each assignee
+  // Emails
   employees.forEach((emp) => sendTaskAssignedToEmployee(emp, assignedByName, populated));
   const superAdmins = await User.find({ role: "SUPER_ADMIN", _id: { $ne: currentUser.id } });
   superAdmins.forEach((sa) =>
@@ -106,121 +114,108 @@ export const createTask = async (data, currentUser) => {
   return populated;
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
 // GET TASKS
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
 export const getTasks = async (currentUser) => {
   const base = { isDeleted: false };
-
-  if (currentUser.role === "SUPER_ADMIN") {
-    return Task.find(base).populate(POPULATE).sort({ createdAt: -1 });
-  }
-  if (currentUser.role === "ADMIN") {
-    return Task.find({ ...base, assignedBy: currentUser.id }).populate(POPULATE).sort({ createdAt: -1 });
-  }
-  if (currentUser.role === "EMPLOYEE") {
-    return Task.find({ ...base, "assignees.user": currentUser.id }).populate(POPULATE).sort({ createdAt: -1 });
-  }
+  const sort = { createdAt: -1 };
+  if (currentUser.role === "SUPER_ADMIN")
+    return Task.find(base).populate(POPULATE).sort(sort);
+  if (currentUser.role === "ADMIN")
+    return Task.find({ ...base, assignedBy: currentUser.id }).populate(POPULATE).sort(sort);
+  if (currentUser.role === "EMPLOYEE")
+    return Task.find({ ...base, "assignees.user": currentUser.id }).populate(POPULATE).sort(sort);
   throw new Error("Invalid role");
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// UPDATE TASK (admin edits title/desc/overall/deadline/assignees)
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
+// UPDATE TASK  (admin edits metadata / reassigns employees)
+// ─────────────────────────────────────────────────────────────────
 export const updateTask = async (taskId, data, currentUser) => {
-  const isSuperAdmin = currentUser.role === "SUPER_ADMIN";
   const task = await Task.findById(taskId);
   if (!task || task.isDeleted) throw new Error("Task not found");
-
   if (!["ADMIN", "SUPER_ADMIN"].includes(currentUser.role))
     throw new Error("Use the my-progress endpoint to update your progress");
   if (currentUser.role === "ADMIN" && task.assignedBy.toString() !== currentUser.id)
     throw new Error("Not allowed to update this task");
 
-  const oldOverallStatus   = task.overallStatus;
-  const oldOverallProgress = task.overallProgress;
+  const oldStatus   = task.overallStatus;
+  const oldProgress = task.overallProgress;
 
   const { title, description, priority, deadline, assignedTo } = data;
-  if (title           !== undefined) task.title           = title;
-  if (description     !== undefined) task.description     = description;
-  if (priority        !== undefined) task.priority        = priority;
-  if (deadline        !== undefined) task.deadline        = deadline;
+  if (title       !== undefined) task.title       = title;
+  if (description !== undefined) task.description = description;
+  if (priority    !== undefined) task.priority    = priority;
+  if (deadline    !== undefined) task.deadline    = deadline;
 
-  // Reassign employees
   if (assignedTo !== undefined) {
-    const ids = Array.isArray(assignedTo) ? assignedTo : [assignedTo];
-    if (ids.length === 0) throw new Error("At least one employee must be assigned");
+    const ids  = Array.isArray(assignedTo) ? assignedTo : [assignedTo];
+    if (!ids.length) throw new Error("At least one employee must be assigned");
     const emps = await User.find({ _id: { $in: ids } });
     if (emps.length !== ids.length) throw new Error("One or more employees not found");
     if (emps.some((e) => e.role !== "EMPLOYEE"))
       throw new Error("Tasks can only be assigned to employees");
-
-    // Preserve existing progress for employees who stay; add new ones fresh
     const existing = new Map(task.assignees.map((a) => [a.user.toString(), a]));
-    task.assignees = ids.map((id) => existing.get(id.toString()) || { user: id, status: "PENDING", progress: 0 });
+    task.assignees = ids.map((id) =>
+      existing.get(id.toString()) ?? { user: id, status: "PENDING", progress: 0 }
+    );
   }
 
   const { overallProgress, overallStatus } = calculateOverall(task.assignees);
-
-    task.overallProgress = overallProgress;
-    task.overallStatus = overallStatus;
-
+  task.overallProgress = overallProgress;
+  task.overallStatus   = overallStatus;
   await task.save();
 
-  // Log if overall changed
-  if (oldOverallStatus !== task.overallStatus || oldOverallProgress !== task.overallProgress) {
+  const changed = shouldSendUpdate({
+    oldStatus, newStatus: overallStatus,
+    oldProgress, newProgress: overallProgress,
+  });
+
+  if (changed) {
     try {
       await createLog({
-        taskId: task._id,
-        userId: currentUser.id,
-        message: `Overall — Status: ${oldOverallStatus} → ${task.overallStatus} | Progress: ${oldOverallProgress}% → ${task.overallProgress}%`,
-        progress: task.overallProgress,
-        status: task.overallStatus,
+        taskId: task._id, userId: currentUser.id,
+        message:  `Overall — ${oldStatus} → ${overallStatus} | ${oldProgress}% → ${overallProgress}%`,
+        progress: overallProgress, status: overallStatus,
       });
-    } catch (err) { console.error("Auto-log error:", err.message); }
+    } catch (err) { console.error("Log error:", err.message); }
 
-    const populated = await Task.findById(task._id).populate(POPULATE);
+    const populated      = await getPopulated(task._id);
     const assignedByName = populated.assignedBy?.name || "Admin";
 
-    if (!isSuperAdmin) {
-        const assignees = await User.find({ _id: { $in: task.assignees.map((a) => a.user) } });
-
-        assignees.forEach((emp) =>
-          sendTaskUpdatedToEmployee(emp, assignedByName, populated)
-        );
-      }
-
-    if (!isSuperAdmin) {
-    task.assignees.forEach(({ user: empId }) => {
-      sendNotification(empId.toString(), "task_updated", {
-        message: `Your task "${task.title}" was updated by ${assignedByName}`,
-        task: populated,
+    // Notify & email assignees (admin is the actor, not an assignee)
+    if (currentUser.role !== "SUPER_ADMIN") {
+      const assigneeIds = task.assignees.map((a) => a.user.toString());
+      const assignees   = await User.find({ _id: { $in: assigneeIds } });
+      assignees.forEach((emp) => {
+        sendNotification(emp._id.toString(), "task_updated", {
+          message: `Your task "${task.title}" was updated by ${assignedByName}`,
+          task:    populated,
+        });
+        sendTaskUpdatedToEmployee(emp, assignedByName, populated);
       });
-    });
-  }
-    const statusLabel    = task.overallStatus.replace(/_/g, " ");
-    const isCompleted    = task.overallStatus === "COMPLETED";
+    }
 
+    // Super admin oversight — socket + email when actor is ADMIN
     if (currentUser.role === "ADMIN") {
       sendNotificationToRole("SUPER_ADMIN", "task_updated", {
-        message: `${assignedByName} updated "${task.title}" — ${statusLabel}, ${task.overallProgress}%`,
-        task: populated,
+        message: `${assignedByName} updated "${task.title}" — ${overallStatus.replace(/_/g, " ")}, ${overallProgress}%`,
+        task:    populated,
       }, currentUser.id);
-    }
-    if (currentUser.role === "ADMIN") {
       const superAdmins = await User.find({ role: "SUPER_ADMIN" });
       superAdmins.forEach((sa) =>
-        sendTaskUpdatedToAdmin(sa, assignedByName, populated, oldOverallStatus, oldOverallProgress)
+        sendTaskUpdatedToAdmin(sa, assignedByName, toPayload(populated), oldStatus, oldProgress)
       );
     }
   }
 
-  return Task.findById(task._id).populate(POPULATE);
+  return getPopulated(task._id);
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// UPDATE MY PROGRESS (employee updates only their own assignee entry)
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
+// UPDATE MY PROGRESS  (employee updates their own assignee entry)
+// ─────────────────────────────────────────────────────────────────
 export const updateMyProgress = async (taskId, data, currentUser) => {
   const task = await Task.findById(taskId);
   if (!task || task.isDeleted) throw new Error("Task not found");
@@ -232,116 +227,138 @@ export const updateMyProgress = async (taskId, data, currentUser) => {
   const oldProgress = entry.progress;
 
   if (data.status   !== undefined) entry.status   = data.status;
-  if (data.progress !== undefined) entry.progress = data.progress;
+  if (data.progress !== undefined) entry.progress = Number(data.progress);
 
-      // ✅ recalculate overall BEFORE saving
-    const { overallProgress, overallStatus } = calculateOverall(task.assignees);
+  const { overallProgress, overallStatus } = calculateOverall(task.assignees);
+  task.overallProgress = overallProgress;
+  task.overallStatus   = overallStatus;
+  await task.save();
 
-    task.overallProgress = overallProgress;
-    task.overallStatus = overallStatus;
+  const changed = shouldSendUpdate({
+    oldStatus, newStatus: entry.status,
+    oldProgress, newProgress: entry.progress,
+  });
+  if (!changed) return getPopulated(task._id);
 
-    await task.save();
+  // Always fetch name from DB — JWT payload may not carry it
+  const actorDoc = await User.findById(currentUser.id).select("name").lean();
+  const empName  = actorDoc?.name ?? currentUser?.name ?? "Employee";
 
-  // Auto-log
-  if (oldStatus !== entry.status || oldProgress !== entry.progress) {
-    try {
-      await createLog({
-        taskId: task._id,
-        userId: currentUser.id,
-        message: `${currentUser.name || "Employee"} — Status: ${oldStatus} → ${entry.status} | Progress: ${oldProgress}% → ${entry.progress}%`,
-        progress: entry.progress,
-        status: entry.status,
-      });
-    } catch (err) { console.error("Auto-log error:", err.message); }
-
-    const populated = await Task.findById(task._id).populate(POPULATE);
-        // ✅ Notify OTHER employees
-    task.assignees.forEach(({ user: empId }) => {
-      if (empId.toString() !== currentUser.id) {
-        sendNotification(empId.toString(), "task_updated", {
-          message: `${currentUser.name} updated "${task.title}" — ${entry.status}, ${entry.progress}%`,
-          task: populated,
-        });
-      }
+  // DB-only log — no side effects in createLog anymore
+  try {
+    await createLog({
+      taskId: task._id, userId: currentUser.id,
+      message:  `${empName} — ${oldStatus} → ${entry.status} | ${oldProgress}% → ${entry.progress}%`,
+      progress: entry.progress, status: entry.status,
     });
+  } catch (err) { console.error("Log error:", err.message); }
 
-        // ✅ Email OTHER employees
-    const otherEmployees = await User.find({
-      _id: {
-        $in: task.assignees.map(a => a.user),
-        $ne: currentUser.id
-      }
-    });
+  const populated         = await getPopulated(task._id);
+  const isOverallComplete = overallStatus === "COMPLETED";
+  const statusLabel       = entry.status.replace(/_/g, " ");
+  const adminId           = task.assignedBy.toString();
 
-    otherEmployees.forEach(emp =>
-      sendTaskUpdatedToEmployee(emp, currentUser.name, populated)
+  // ── 1. Co-assignees — socket + email, skip the actor ──────────────────────
+  const coAssigneeIds = task.assignees
+    .map((a) => a.user.toString())
+    .filter((id) => id !== currentUser.id);
+
+  if (coAssigneeIds.length) {
+    const peerMsg    = `${empName} updated "${task.title}" — ${statusLabel}, ${entry.progress}%`;
+    const coAssignees = await User.find({ _id: { $in: coAssigneeIds } });
+    coAssigneeIds.forEach((id) =>
+      sendNotification(id, "task_updated", { message: peerMsg, task: populated })
     );
-    const empName    = currentUser.name || "Employee";
-    const statusLabel = entry.status.replace(/_/g, " ");
-    const isCompleted = entry.status === "COMPLETED";
-
-    const adminMsg = isCompleted
-      ? `✅ ${empName} completed their part of "${task.title}"!`
-      : `${empName} updated "${task.title}" — ${statusLabel}, ${entry.progress}%`;
-
-    sendNotification(task.assignedBy.toString(), "task_updated", { message: adminMsg, task: populated });
-    sendNotificationToRole("SUPER_ADMIN", "task_updated", { message: adminMsg, task: populated }, currentUser.id);
-
-    const assigningAdmin = await User.findById(task.assignedBy);
-    if (assigningAdmin) sendTaskUpdatedToAdmin(assigningAdmin, empName, populated, oldStatus, oldProgress);
-
-    const superAdmins = await User.find({ role: "SUPER_ADMIN", _id: { $ne: currentUser.id } });
-    superAdmins.forEach((sa) => sendTaskUpdatedToAdmin(sa, empName, populated, oldStatus, oldProgress));
+    coAssignees.forEach((emp) => sendTaskUpdatedToEmployee(emp, empName, populated));
   }
 
-  return Task.findById(task._id).populate(POPULATE);
+  // ── 2. Assigning admin — exactly one socket + exactly one email ───────────
+  const assigningAdmin = await User.findById(adminId);
+  if (assigningAdmin) {
+    const adminMsg = isOverallComplete
+      ? `✅ All assignees completed "${task.title}"!`
+      : entry.status === "COMPLETED"
+        ? `✅ ${empName} completed their part of "${task.title}"!`
+        : `${empName} updated "${task.title}" — ${statusLabel}, ${entry.progress}%`;
+
+    sendNotification(adminId, "task_updated", { message: adminMsg, task: populated });
+    // Routes to "completed" email template automatically when overallStatus = COMPLETED
+    sendTaskUpdatedToAdmin(assigningAdmin, empName, toPayload(populated), oldStatus, oldProgress);
+  }
+
+  // ── 3. Super admins — socket always; email only on full completion ─────────
+  //       Skip super admin if they are also the assigning admin (already notified above)
+  const superAdmins = await User.find({ role: "SUPER_ADMIN" });
+  superAdmins.forEach((sa) => {
+    const saId     = sa._id.toString();
+    const saMsg    = isOverallComplete
+      ? `✅ All assignees completed "${task.title}"!`
+      : `${empName} updated "${task.title}" — ${statusLabel}, ${entry.progress}%`;
+    const saEvent  = isOverallComplete ? "task_completed" : "task_updated";
+
+    sendNotification(saId, saEvent, { message: saMsg, task: populated });
+
+    if (isOverallComplete && saId !== adminId) {
+      sendTaskUpdatedToAdmin(sa, empName, toPayload(populated), oldStatus, oldProgress);
+    }
+  });
+
+  return getPopulated(task._id);
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
 // DELETE TASK
-// ─────────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
 export const deleteTask = async (taskId, currentUser) => {
   const task = await Task.findById(taskId);
-  if (!task) throw new Error("Task not found");
-
+  if (!task)          throw new Error("Task not found");
+  if (task.isDeleted) throw new Error("Task already deleted");
   if (currentUser.role === "ADMIN" && task.assignedBy.toString() !== currentUser.id)
     throw new Error("Not allowed to delete this task");
 
-  const populated = await Task.findById(taskId).populate(POPULATE);
-  const employeeNames  = populated.assignees.map((a) => a.user?.name).join(", ");
-  const assignedByName = populated.assignedBy?.name || "Admin";
-  const assigningAdmin = await User.findById(task.assignedBy);
+  const populated     = await getPopulated(taskId);
+  const employeeNames = populated.assignees.map((a) => a.user?.name || "Employee").join(", ");
+  const adminId       = task.assignedBy.toString();
 
   task.isDeleted = true;
   await task.save();
 
-  // 🔔 Notify every assignee
-  task.assignees.forEach(({ user: empId }) => {
+  // Notify every assignee
+  task.assignees.forEach(({ user: empId }) =>
     sendNotification(empId.toString(), "task_deleted", {
       message: `Your task "${task.title}" has been removed`,
-      taskId: task._id,
-    });
-  });
+      taskId:  task._id,
+    })
+  );
 
+  // Notify the assigning admin when super admin deletes
+  if (currentUser.role === "SUPER_ADMIN") {
+    sendNotification(adminId, "task_deleted", {
+      message: `Your task "${task.title}" was removed by a Super Admin`,
+      taskId:  task._id,
+    });
+  }
+
+  // Notify super admins when admin deletes
   if (currentUser.role === "ADMIN") {
     sendNotificationToRole("SUPER_ADMIN", "task_deleted", {
-      message: `${assignedByName} deleted task "${task.title}" (assigned to ${employeeNames})`,
-      taskId: task._id,
+      message: `${populated.assignedBy?.name || "Admin"} deleted "${task.title}" (assigned to ${employeeNames})`,
+      taskId:  task._id,
     }, currentUser.id);
   }
-  if (currentUser.role === "SUPER_ADMIN") {
-    sendNotification(task.assignedBy.toString(), "task_deleted", {
-      message: `Task "${task.title}" (assigned to ${employeeNames}) was removed by Super Admin`,
-      taskId: task._id,
-    });
-  }
 
-  // 📧 Email each assignee
+  // Email every assignee
   const assignees = await User.find({ _id: { $in: task.assignees.map((a) => a.user) } });
   assignees.forEach((emp) => sendTaskDeletedToEmployee(emp, task.title));
 
-  if (currentUser.role === "SUPER_ADMIN" && assigningAdmin)
-    sendTaskDeletedToAdmin(assigningAdmin, task.title, employeeNames);
+  // Email the assigning admin when super admin deletes
+  if (currentUser.role === "SUPER_ADMIN") {
+    const assigningAdmin = await User.findById(adminId);
+    if (assigningAdmin?.role === "ADMIN")
+      sendTaskDeletedToAdmin(assigningAdmin, task.title, employeeNames);
+  }
+
+  // Email super admins when admin deletes
   if (currentUser.role === "ADMIN") {
     const superAdmins = await User.find({ role: "SUPER_ADMIN" });
     superAdmins.forEach((sa) => sendTaskDeletedToAdmin(sa, task.title, employeeNames));

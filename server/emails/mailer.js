@@ -1,3 +1,8 @@
+/**
+ * mailer.js — WorkTrack email dispatch layer
+ * Fire-and-forget. Never throws. Always logs.
+ */
+
 import transporter from "../config/email.js";
 import {
   verificationEmail,
@@ -13,39 +18,31 @@ import {
 } from "./templates.js";
 
 const clean = (val) => (val || "").replace(/^["']|["']$/g, "").trim();
-const FROM = clean(process.env.EMAIL_FROM) || "WorkTrack <no-reply@worktrack.app>";
+const FROM  = clean(process.env.EMAIL_FROM) || "WorkTrack <no-reply@worktrack.app>";
 
-/**
- * Core send helper — never throws, always logs
- */
+const safeStatus = (v) => {
+  const VALID = ["PENDING", "IN_PROGRESS", "COMPLETED", "BLOCKED"];
+  return VALID.includes(v) ? v : "PENDING";
+};
+
 const send = async ({ to, subject, html }) => {
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.warn("⚠️  Email not configured — skipping send to:", to);
+    console.warn(`⚠️  [Mailer] Not configured — skipping: ${to}`);
+    return;
+  }
+  if (!to) {
+    console.warn("⚠️  [Mailer] No recipient — skipping.");
     return;
   }
   try {
     const info = await transporter.sendMail({ from: FROM, to, subject, html });
-    console.log(`📧 Email sent to ${to} — ${info.messageId}`);
+    console.log(`📧 [Mailer] Sent to ${to} — id: ${info.messageId}`);
   } catch (err) {
-    console.error(`❌ Email failed to ${to}:`, err.message);
+    console.error(`❌ [Mailer] Failed to ${to} — "${subject}" — ${err.message}`);
   }
 };
 
-
-
-// -- password Frogot ------------------------
-
-export const sendPasswordResetEmail = (user, resetURL) => {
-  return send({
-    to: user.email,
-    subject: "Reset your WorkTrack password",
-    html: passwordResetEmail({
-      name: user.name,
-      resetURL,
-    }),
-  });
-};
-// ── Verification ─────────────────────────────────────────────────────────────
+// ── Auth ──────────────────────────────────────────────────────────────────────
 
 export const sendVerificationEmail = (user, token) => {
   const verifyUrl = `${process.env.APP_URL || "http://localhost:3000"}/verify-email?token=${token}`;
@@ -56,19 +53,21 @@ export const sendVerificationEmail = (user, token) => {
   });
 };
 
-//-- reset sucessfull
+export const sendPasswordResetEmail = (user, resetURL) =>
+  send({
+    to: user.email,
+    subject: "Reset your WorkTrack password",
+    html: passwordResetEmail({ name: user.name, resetURL }),
+  });
 
-export const sendPasswordChangedEmail = (user) => {
-  return send({
+export const sendPasswordChangedEmail = (user) =>
+  send({
     to: user.email,
     subject: "Your WorkTrack password was changed",
-    html: passwordChangedEmail({
-      name: user.name,
-    }),
+    html: passwordChangedEmail({ name: user.name }),
   });
-};
 
-// ── Task notifications ────────────────────────────────────────────────────────
+// ── Task ──────────────────────────────────────────────────────────────────────
 
 export const sendTaskAssignedToEmployee = (employee, assignedByName, task) =>
   send({
@@ -89,19 +88,41 @@ export const sendTaskAssignedToSuperAdmin = (superAdmin, assignedByName, employe
     }),
   });
 
-export const sendTaskUpdatedToAdmin = (admin, employeeName, task, oldStatus, oldProgress) => {
-  const isCompleted = task.status === "COMPLETED";
+/**
+ * sendTaskUpdatedToAdmin
+ *
+ * Single entry point for all admin update emails.
+ * Automatically routes to taskCompletedEmail when overallStatus = COMPLETED,
+ * otherwise sends taskUpdatedAdminEmail (no diff / "What Changed" section).
+ *
+ * Works with both Mongoose documents and plain objects.
+ */
+export const sendTaskUpdatedToAdmin = (admin, employeeName, task, _oldStatus, _oldProgress) => {
+  const effectiveStatus = safeStatus(task?.overallStatus ?? task?.status);
+  const isCompleted     = effectiveStatus === "COMPLETED";
+
   if (isCompleted) {
     return send({
       to: admin.email,
       subject: `✅ Task completed: "${task.title}"`,
-      html: taskCompletedEmail({ recipientName: admin.name, employeeName, task }),
+      html: taskCompletedEmail({
+        recipientName: admin.name,
+        employeeName,
+        task,
+      }),
     });
   }
+
   return send({
     to: admin.email,
     subject: `Task update: "${task.title}"`,
-    html: taskUpdatedAdminEmail({ adminName: admin.name, employeeName, task, oldStatus, oldProgress }),
+    html: taskUpdatedAdminEmail({
+      adminName: admin.name,
+      employeeName,
+      task,
+      // oldStatus and oldProgress intentionally NOT passed —
+      // "What Changed" section has been removed from the template.
+    }),
   });
 };
 
