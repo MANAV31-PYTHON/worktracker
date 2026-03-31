@@ -86,9 +86,8 @@ export const updateUserRole = async (userId, newRole, currentUser) => {
   if (!user) throw new Error("User not found");
   if (user._id.toString() === currentUser.id) throw new Error("Cannot change your own role");
 
-  user.role = newRole;
-  await user.save();
-  return user;
+  await User.updateOne({ _id: userId }, { role: newRole });
+  return { ...user.toObject(), role: newRole };
 };
 
 /**
@@ -100,10 +99,11 @@ export const toggleUserActive = async (userId, currentUser) => {
   const user = await User.findById(userId);
   if (!user) throw new Error("User not found");
   if (user._id.toString() === currentUser.id) throw new Error("Cannot deactivate yourself");
+  const newActiveState = !user.isActive;
 
-  user.isActive = !user.isActive;
-  await user.save();
-  return user;
+    await User.updateOne({ _id: userId }, { isActive: newActiveState });
+
+    return { ...user.toObject(), isActive: newActiveState };
 };
 
 /**
@@ -134,16 +134,17 @@ export const forgotPassword = async (email) => {
   return { message: "If an account exists, a reset email has been sent" };
 }
 
-  const resetToken = crypto.randomBytes(32).toString("hex");
+   const resetToken = crypto.randomBytes(32).toString("hex");
+    const hashedToken = crypto.createHash("sha256").update(resetToken).digest("hex");
+    const expire = Date.now() + 15 * 60 * 1000;
 
-  user.resetPasswordToken = crypto
-    .createHash("sha256")
-    .update(resetToken)
-    .digest("hex");
-
-  user.resetPasswordExpire = Date.now() + 15 * 60 * 1000; // 15 min
-
-  await user.save();
+  await User.updateOne(
+    { _id: user._id },
+    {
+      resetPasswordToken: hashedToken,
+      resetPasswordExpire: expire,
+    }
+  );
 
   const resetURL = `${process.env.APP_URL || "http://localhost:5173"}/reset-password/${resetToken}`;
 
@@ -171,9 +172,7 @@ export const resetPassword = async (token, newPassword) => {
     if (!user) {
       throw new Error("Invalid or expired token");
     }
-
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    user.password = hashedPassword;
+    user.password = newPassword;
 
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;

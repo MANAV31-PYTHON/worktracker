@@ -32,6 +32,11 @@ export const loginUser = async (data) => {
     email: { $regex: `^${email}$`, $options: "i" }
   }).select("+password");
 
+  // console.log("🔍 user found:", user?.email);
+  // console.log("🔍 password from DB:", user?.password);        // should be a $2b$ hash
+  // console.log("🔍 password entered:", password);              // plain text
+  // console.log("🔍 bcrypt result:", user ? await bcrypt.compare(password, user.password) : "no user");
+
   if (!user) throw new Error("Invalid credentials");
 
   if (!user.isActive)

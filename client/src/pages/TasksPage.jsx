@@ -3,7 +3,7 @@ import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import socket from "../sockets/socket";
 import { useDialog } from "../components/Dialog";
-import { HiPlus, HiPencil, HiTrash, HiClipboardList, HiChevronDown, HiChevronUp } from "react-icons/hi";
+import { HiBookmark, HiPlus, HiPencil, HiTrash, HiClipboardList, HiChevronDown, HiChevronUp } from "react-icons/hi";
 import { HiBuildingOffice2, HiUser, HiShieldCheck, HiCalendarDays, HiUsers } from "react-icons/hi2";
 
 const statusOptions = ["PENDING", "IN_PROGRESS", "COMPLETED", "BLOCKED"];
@@ -39,21 +39,62 @@ export default function TasksPage() {
   const isEmployee = role === "EMPLOYEE";
   const { confirm } = useDialog();
 
-  const [tasks, setTasks]           = useState([]);
-  const [employees, setEmployees]   = useState([]);
+  const [tasks, setTasks]             = useState([]);
+  const [employees, setEmployees]     = useState([]);
   const [departments, setDepartments] = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [filter, setFilter]         = useState("ALL");
-  const [deptFilter, setDeptFilter] = useState("ALL");
+  const [loading, setLoading]         = useState(true);
+  const [filter, setFilter]           = useState("ALL");
+  const [deptFilter, setDeptFilter]   = useState("ALL");
 
   // Modals
-  const [showCreate, setShowCreate]   = useState(false);
-  const [showUpdate, setShowUpdate]   = useState(false);
-  const [showLogs, setShowLogs]       = useState(false);
+  const [showCreate, setShowCreate]         = useState(false);
+  const [showUpdate, setShowUpdate]         = useState(false);
+  const [showLogs, setShowLogs]             = useState(false);
   const [showMyProgress, setShowMyProgress] = useState(false);
   const [selectedTask, setSelectedTask]     = useState(null);
-  const [logs, setLogs]               = useState([]);
-  const [logsLoading, setLogsLoading] = useState(false);
+  const [logs, setLogs]                     = useState([]);
+  const [logsLoading, setLogsLoading]       = useState(false);
+
+  // ── Personal Tasks state ─────────────────────────────────────────────────────
+  const [personalTasks, setPersonalTasks]               = useState([]);
+  const [personalLoading, setPersonalLoading]           = useState(true);
+  const [showPersonalCreate, setShowPersonalCreate]     = useState(false);
+  const [showPersonalUpdate, setShowPersonalUpdate]     = useState(false);
+  const [selectedPersonalTask, setSelectedPersonalTask] = useState(null);
+  const [showPersonalSection, setShowPersonalSection]   = useState(true);
+  // ────────────────────────────────────────────────────────────────────────────
+
+  const fetchPersonalTasks = useCallback(async () => {
+    try {
+      const res = await api.get("/personal-tasks");
+      setPersonalTasks(res.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setPersonalLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchPersonalTasks(); }, [fetchPersonalTasks]);
+
+  const handleDeletePersonalTask = async (taskId) => {
+    const ok = await confirm({
+      title: "Delete Reminder", icon: "🗑️", danger: true,
+      message: "Delete this personal reminder? This cannot be undone.",
+      confirmLabel: "Delete",
+    });
+    if (!ok) return;
+    try {
+      await api.delete(`/personal-tasks/${taskId}`);
+      fetchPersonalTasks();
+    } catch (err) {
+      await confirm({
+        type: "alert", title: "Error", icon: "⚠️",
+        danger: false, confirmLabel: "OK",
+        message: err.response?.data?.message || "Error deleting reminder",
+      });
+    }
+  };
 
   const fetchTasks = useCallback(async () => {
     try {
@@ -110,8 +151,10 @@ export default function TasksPage() {
       await api.delete(`/tasks/${taskId}`);
       fetchTasks();
     } catch (err) {
-      await confirm({ type: "alert", title: "Error", icon: "⚠️", danger: false, confirmLabel: "OK",
-        message: err.response?.data?.message || "Error deleting task" });
+      await confirm({
+        type: "alert", title: "Error", icon: "⚠️", danger: false, confirmLabel: "OK",
+        message: err.response?.data?.message || "Error deleting task",
+      });
     }
   };
 
@@ -162,6 +205,67 @@ export default function TasksPage() {
         </div>
       </div>
 
+      {/* ── Personal Reminders Section ───────────────────────────────────────── */}
+      <div style={{
+        background: "var(--bg2)",
+        border: "1px solid var(--border)",
+        borderRadius: 12,
+        padding: "16px 20px",
+        marginBottom: 24,
+      }}>
+        {/* Section header */}
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          marginBottom: showPersonalSection ? 16 : 0,
+        }}>
+          <button
+            onClick={() => setShowPersonalSection((p) => !p)}
+            style={{
+              display: "flex", alignItems: "center", gap: 8,
+              background: "none", border: "none", cursor: "pointer",
+              fontWeight: 700, fontSize: 15, color: "var(--text)",
+            }}
+          >
+            <HiBookmark size={16} style={{ color: "var(--primary, #6366f1)" }} />
+            My Personal Reminders
+            <span style={{ fontSize: 12, color: "var(--text-3)", fontWeight: 400 }}>
+              ({personalTasks.length})
+            </span>
+            {showPersonalSection ? <HiChevronUp size={14} /> : <HiChevronDown size={14} />}
+          </button>
+
+          <button
+            className="btn btn-primary"
+            style={{ gap: 6, padding: "6px 14px", fontSize: 13 }}
+            onClick={() => setShowPersonalCreate(true)}
+          >
+            <HiPlus size={14} /> Add Reminder
+          </button>
+        </div>
+
+        {showPersonalSection && (
+          personalLoading ? (
+            <div className="loading-center"><span className="spinner" /></div>
+          ) : personalTasks.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "20px 0", color: "var(--text-3)", fontSize: 13 }}>
+              No personal reminders yet. Add one to get started.
+            </div>
+          ) : (
+            <div className="tasks-grid">
+              {personalTasks.map((task) => (
+                <PersonalTaskCard
+                  key={task._id}
+                  task={task}
+                  onEdit={() => { setSelectedPersonalTask(task); setShowPersonalUpdate(true); }}
+                  onDelete={() => handleDeletePersonalTask(task._id)}
+                />
+              ))}
+            </div>
+          )
+        )}
+      </div>
+      {/* ──────────────────────────────────────────────────────────────────────── */}
+
       <div className="filter-bar">
         {["ALL", ...statusOptions].map((s) => (
           <button key={s} className={`filter-btn ${filter === s ? "active" : ""}`} onClick={() => setFilter(s)}>
@@ -195,6 +299,7 @@ export default function TasksPage() {
         </div>
       )}
 
+      {/* ── Existing modals ───────────────────────────────────────────────────── */}
       {showCreate && (
         <CreateTaskModal
           employees={employees} departments={departments}
@@ -223,14 +328,30 @@ export default function TasksPage() {
           onLogAdded={() => { openLogs(selectedTask); fetchTasks(); }}
         />
       )}
+
+      {/* ── Personal task modals ──────────────────────────────────────────────── */}
+      {showPersonalCreate && (
+        <PersonalTaskModal
+          onClose={() => setShowPersonalCreate(false)}
+          onSaved={fetchPersonalTasks}
+        />
+      )}
+      {showPersonalUpdate && selectedPersonalTask && (
+        <PersonalTaskModal
+          task={selectedPersonalTask}
+          onClose={() => { setShowPersonalUpdate(false); setSelectedPersonalTask(null); }}
+          onSaved={fetchPersonalTasks}
+        />
+      )}
     </div>
   );
 }
 
 // ─── Task Card ────────────────────────────────────────────────────────────────
-function TaskCard({ task, isAdmin, isSuperAdmin, isEmployee, currentUserId, myEntry,
-  department, onUpdate, onDelete, onViewLogs, onMyProgress }) {
-
+function TaskCard({
+  task, isAdmin, isSuperAdmin, isEmployee, currentUserId, myEntry,
+  department, onUpdate, onDelete, onViewLogs, onMyProgress,
+}) {
   const [expanded, setExpanded] = useState(false);
   const assigneeCount = task.assignees?.length ?? 0;
 
@@ -375,6 +496,164 @@ function TaskCard({ task, isAdmin, isSuperAdmin, isEmployee, currentUserId, myEn
   );
 }
 
+// ─── Personal Task Card ───────────────────────────────────────────────────────
+function PersonalTaskCard({ task, onEdit, onDelete }) {
+  return (
+    <div className="task-card" style={{ borderLeft: "3px solid var(--primary, #6366f1)" }}>
+      <div className="task-card-header">
+        <div className="task-card-badges">
+          <span className={`badge ${statusColors[task.status]}`}>
+            {task.status?.replace(/_/g, " ")}
+          </span>
+          <span className={`pri ${priorityColors[task.priority]}`}>{task.priority}</span>
+        </div>
+        <div className="task-card-actions">
+          <button className="icon-btn" title="Edit reminder" onClick={onEdit}>
+            <HiPencil size={15} />
+          </button>
+          <button className="icon-btn danger" title="Delete reminder" onClick={onDelete}>
+            <HiTrash size={15} />
+          </button>
+        </div>
+      </div>
+
+      <h3 className="task-card-title">{task.title}</h3>
+      {task.description && <p className="task-card-desc">{task.description}</p>}
+
+      <div className="task-progress-wrap">
+        <div className="progress-label">
+          <span className="text-muted text-sm">Progress</span>
+          <span className="text-sm font-medium">{task.progress}%</span>
+        </div>
+        <div className="progress-bar">
+          <div
+            className={`progress-fill ${progressFillClass(task.progress)}`}
+            style={{ width: `${task.progress}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="task-card-footer">
+        <span style={{ fontSize: 11, color: "var(--primary, #6366f1)", fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}>
+          <HiBookmark size={11} /> Personal
+        </span>
+        <div className="text-sm text-muted" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <HiCalendarDays size={13} />
+          {task.deadline ? new Date(task.deadline).toLocaleDateString() : "No deadline"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Personal Task Modal (Create + Edit) ──────────────────────────────────────
+function PersonalTaskModal({ task, onClose, onSaved }) {
+  const isEdit = !!task;
+  const [form, setForm] = useState({
+    title:       task?.title        || "",
+    description: task?.description  || "",
+    priority:    task?.priority     || "MEDIUM",
+    deadline:    task?.deadline ? task.deadline.split("T")[0] : "",
+    status:      task?.status       || "PENDING",
+    progress:    task?.progress     ?? 0,
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState("");
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true); setError("");
+    try {
+      if (isEdit) {
+        await api.put(`/personal-tasks/${task._id}`, form);
+      } else {
+        await api.post("/personal-tasks", form);
+      }
+      onSaved(); onClose();
+    } catch (err) {
+      setError(err.response?.data?.message || "Error saving reminder");
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>{isEdit ? "Edit Reminder" : "New Personal Reminder"}</h2>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          {error && <div className="alert alert-error">{error}</div>}
+
+          <div className="form-group">
+            <label>Title *</label>
+            <input
+              value={form.title}
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
+              placeholder="What do you need to do?"
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label>Description</label>
+            <textarea
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+              placeholder="Any notes..."
+              rows={2}
+            />
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label>Status</label>
+              <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                {statusOptions.map((s) => <option key={s}>{s}</option>)}
+              </select>
+            </div>
+            <div className="form-group">
+              <label>Priority</label>
+              <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })}>
+                {priorityOptions.map((p) => <option key={p}>{p}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Progress: {form.progress}%</label>
+            <input
+              type="range" min={0} max={100} value={form.progress}
+              onChange={(e) => setForm({ ...form, progress: +e.target.value })}
+            />
+            <div className="progress-bar" style={{ marginTop: 6 }}>
+              <div
+                className={`progress-fill ${progressFillClass(form.progress)}`}
+                style={{ width: `${form.progress}%` }}
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label>Deadline</label>
+            <input
+              type="date" value={form.deadline}
+              onChange={(e) => setForm({ ...form, deadline: e.target.value })}
+            />
+          </div>
+
+          <div className="modal-footer">
+            <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? <span className="spinner" /> : isEdit ? "Save Changes" : "Create Reminder"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ─── Checkbox Employee Picker ──────────────────────────────────────────────────
 function EmployeePicker({ employees, departments, selected, onChange }) {
   const [deptFilter, setDeptFilter] = useState("");
@@ -506,12 +785,12 @@ function UpdateTaskModal({ task, departments, employees, onClose, onUpdated }) {
   const existingIds = task.assignees?.map((a) => a.user?._id || a.user) || [];
 
   const [form, setForm] = useState({
-    title: task.title,
-    description: task.description || "",
-    overallStatus: task.overallStatus,
+    title:           task.title,
+    description:     task.description || "",
+    overallStatus:   task.overallStatus,
     overallProgress: task.overallProgress,
-    priority: task.priority,
-    deadline: task.deadline ? task.deadline.split("T")[0] : "",
+    priority:        task.priority,
+    deadline:        task.deadline ? task.deadline.split("T")[0] : "",
   });
   const [selected, setSelected] = useState(existingIds);
   const [loading, setLoading]   = useState(false);
@@ -605,7 +884,7 @@ function UpdateTaskModal({ task, departments, employees, onClose, onUpdated }) {
 function MyProgressModal({ task, currentUserId, onClose, onUpdated }) {
   const myEntry = task.assignees?.find((a) => (a.user?._id || a.user) === currentUserId);
   const [form, setForm] = useState({
-    status: myEntry?.status || "PENDING",
+    status:   myEntry?.status   || "PENDING",
     progress: myEntry?.progress ?? 0,
   });
   const [loading, setLoading] = useState(false);
