@@ -39,29 +39,29 @@ export default function TasksPage() {
   const isEmployee = role === "EMPLOYEE";
   const { confirm } = useDialog();
 
-  const [tasks, setTasks]             = useState([]);
-  const [employees, setEmployees]     = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [departments, setDepartments] = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [filter, setFilter]           = useState("ALL");
-  const [deptFilter, setDeptFilter]   = useState("ALL");
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("ALL");
+  const [deptFilter, setDeptFilter] = useState("ALL");
 
   // Modals
-  const [showCreate, setShowCreate]         = useState(false);
-  const [showUpdate, setShowUpdate]         = useState(false);
-  const [showLogs, setShowLogs]             = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [showUpdate, setShowUpdate] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
   const [showMyProgress, setShowMyProgress] = useState(false);
-  const [selectedTask, setSelectedTask]     = useState(null);
-  const [logs, setLogs]                     = useState([]);
-  const [logsLoading, setLogsLoading]       = useState(false);
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [logs, setLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(false);
 
   // ── Personal Tasks state ─────────────────────────────────────────────────────
-  const [personalTasks, setPersonalTasks]               = useState([]);
-  const [personalLoading, setPersonalLoading]           = useState(true);
-  const [showPersonalCreate, setShowPersonalCreate]     = useState(false);
-  const [showPersonalUpdate, setShowPersonalUpdate]     = useState(false);
+  const [personalTasks, setPersonalTasks] = useState([]);
+  const [personalLoading, setPersonalLoading] = useState(true);
+  const [showPersonalCreate, setShowPersonalCreate] = useState(false);
+  const [showPersonalUpdate, setShowPersonalUpdate] = useState(false);
   const [selectedPersonalTask, setSelectedPersonalTask] = useState(null);
-  const [showPersonalSection, setShowPersonalSection]   = useState(true);
+  const [showPersonalSection, setShowPersonalSection] = useState(true);
   // ────────────────────────────────────────────────────────────────────────────
 
   const fetchPersonalTasks = useCallback(async () => {
@@ -120,12 +120,12 @@ export default function TasksPage() {
   useEffect(() => {
     const refresh = () => fetchTasks();
     socket.on("task_assigned", refresh);
-    socket.on("task_updated",  refresh);
-    socket.on("task_deleted",  refresh);
+    socket.on("task_updated", refresh);
+    socket.on("task_deleted", refresh);
     return () => {
       socket.off("task_assigned", refresh);
-      socket.off("task_updated",  refresh);
-      socket.off("task_deleted",  refresh);
+      socket.off("task_updated", refresh);
+      socket.off("task_deleted", refresh);
     };
   }, [fetchTasks]);
 
@@ -417,9 +417,9 @@ function TaskCard({
           {expanded && (
             <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 10 }}>
               {task.assignees.map((a, i) => {
-                const empId   = a.user?._id || a.user;
+                const empId = a.user?._id || a.user;
                 const empName = a.user?.name || "Employee";
-                const isMe    = isEmployee && empId === currentUserId;
+                const isMe = isEmployee && empId === currentUserId;
                 return (
                   <div key={i} style={{
                     background: isMe ? "var(--accent-bg, rgba(99,102,241,.06))" : "var(--bg2)",
@@ -550,15 +550,15 @@ function PersonalTaskCard({ task, onEdit, onDelete }) {
 function PersonalTaskModal({ task, onClose, onSaved }) {
   const isEdit = !!task;
   const [form, setForm] = useState({
-    title:       task?.title        || "",
-    description: task?.description  || "",
-    priority:    task?.priority     || "MEDIUM",
-    deadline:    task?.deadline ? task.deadline.split("T")[0] : "",
-    status:      task?.status       || "PENDING",
-    progress:    task?.progress     ?? 0,
+    title: task?.title || "",
+    description: task?.description || "",
+    priority: task?.priority || "MEDIUM",
+    deadline: task?.deadline ? task.deadline.split("T")[0] : "",
+    status: task?.status || "PENDING",
+    progress: task?.progress ?? 0,
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState("");
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -659,9 +659,9 @@ function EmployeePicker({ employees, departments, selected, onChange }) {
   const [deptFilter, setDeptFilter] = useState("");
   const visible = deptFilter
     ? employees.filter((e) => {
-        const dept = departments.find((d) => d._id === deptFilter);
-        return dept?.members?.some((m) => (m._id || m) === e._id);
-      })
+      const dept = departments.find((d) => d._id === deptFilter);
+      return dept?.members?.some((m) => (m._id || m) === e._id);
+    })
     : employees;
 
   const toggle = (id) =>
@@ -717,8 +717,8 @@ function EmployeePicker({ employees, departments, selected, onChange }) {
 function CreateTaskModal({ employees, departments, onClose, onCreated }) {
   const [form, setForm] = useState({ title: "", description: "", priority: "MEDIUM", deadline: "" });
   const [selected, setSelected] = useState([]);
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -785,16 +785,16 @@ function UpdateTaskModal({ task, departments, employees, onClose, onUpdated }) {
   const existingIds = task.assignees?.map((a) => a.user?._id || a.user) || [];
 
   const [form, setForm] = useState({
-    title:           task.title,
-    description:     task.description || "",
-    overallStatus:   task.overallStatus,
+    title: task.title,
+    description: task.description || "",
+    overallStatus: task.overallStatus,
     overallProgress: task.overallProgress,
-    priority:        task.priority,
-    deadline:        task.deadline ? task.deadline.split("T")[0] : "",
+    priority: task.priority,
+    deadline: task.deadline ? task.deadline.split("T")[0] : "",
   });
   const [selected, setSelected] = useState(existingIds);
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -881,20 +881,137 @@ function UpdateTaskModal({ task, departments, employees, onClose, onUpdated }) {
 }
 
 // ─── My Progress Modal (Employee) ─────────────────────────────────────────────
+// function MyProgressModal({ task, currentUserId, onClose, onUpdated }) {
+//   const myEntry = task.assignees?.find((a) => (a.user?._id || a.user) === currentUserId);
+//   const [form, setForm] = useState({
+//     status:   myEntry?.status   || "PENDING",
+//     progress: myEntry?.progress ?? 0,
+//   });
+//   const [loading, setLoading] = useState(false);
+//   const [error, setError]     = useState("");
+
+//   const getMyEntry = () =>
+//   task.assignees?.find(
+//     (a) => (a.user?._id || a.user) === currentUserId
+//   );
+
+//   useEffect(() => {
+//   const entry = getMyEntry();
+
+//   setForm({
+//     status: entry?.status || "PENDING",
+//     progress: entry?.progress ?? 0,
+//   });
+// }, [task]);
+
+//   const handleSubmit = async (e) => {
+//     e.preventDefault();
+//     setLoading(true); setError("");
+//     try {
+//       await api.patch(`/tasks/${task._id}/my-progress`, form);
+//       onUpdated(); onClose();
+//     } catch (err) {
+//       setError(err.response?.data?.message || "Error updating progress");
+//     } finally { setLoading(false); }
+//   };
+
+//   return (
+//     <div className="modal-overlay" onClick={onClose}>
+//       <div className="modal" onClick={(e) => e.stopPropagation()}>
+//         <div className="modal-header">
+//           <h2>My Progress<span className="modal-subtitle"> — {task.title}</span></h2>
+//           <button className="modal-close" onClick={onClose}>✕</button>
+//         </div>
+//         <form onSubmit={handleSubmit}>
+//           {error && <div className="alert alert-error">{error}</div>}
+
+//           <div className="form-group">
+//             <label>My Status</label>
+//             <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+//               {statusOptions.map((s) => <option key={s}>{s}</option>)}
+//             </select>
+//           </div>
+//           <div className="form-group">
+//             <label>My Progress: {form.progress}%</label>
+//             <input type="range" min={0} max={100} value={form.progress}
+//               onChange={(e) => setForm({ ...form, progress: +e.target.value })} />
+//             <div className="progress-bar" style={{ marginTop: 6 }}>
+//               <div className={`progress-fill ${progressFillClass(form.progress)}`} style={{ width: `${form.progress}%` }} />
+//             </div>
+//           </div>
+
+//           {/* Show other assignees (read-only) */}
+//           {task.assignees?.length > 1 && (
+//             <div style={{ marginBottom: 16 }}>
+//               <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".04em" }}>
+//                 Other Assignees
+//               </p>
+//               <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+//                 {task.assignees
+//                   .filter((a) => (a.user?._id || a.user) !== currentUserId)
+//                   .map((a, i) => (
+//                     <div key={i} style={{
+//                       background: "var(--bg2)", border: "1px solid var(--border)",
+//                       borderRadius: 8, padding: "7px 10px",
+//                     }}>
+//                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+//                         <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>
+//                           {a.user?.name || "Employee"}
+//                         </span>
+//                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+//                           <span className={`badge ${statusColors[a.status]}`} style={{ fontSize: 10, padding: "1px 6px" }}>
+//                             {a.status?.replace(/_/g, " ")}
+//                           </span>
+//                           <span style={{ fontSize: 11, color: "var(--text-3)" }}>{a.progress}%</span>
+//                         </div>
+//                       </div>
+//                       <div className="progress-bar" style={{ height: 4 }}>
+//                         <div className={`progress-fill ${progressFillClass(a.progress)}`} style={{ width: `${a.progress}%` }} />
+//                       </div>
+//                     </div>
+//                   ))}
+//               </div>
+//             </div>
+//           )}
+
+//           <div className="modal-footer">
+//             <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+//             <button type="submit" className="btn btn-primary" disabled={loading}>
+//               {loading ? <span className="spinner" /> : "Save My Progress"}
+//             </button>
+//           </div>
+//         </form>
+//       </div>
+//     </div>
+//   );
+// }
 function MyProgressModal({ task, currentUserId, onClose, onUpdated }) {
   const myEntry = task.assignees?.find((a) => (a.user?._id || a.user) === currentUserId);
+
   const [form, setForm] = useState({
-    status:   myEntry?.status   || "PENDING",
+    status: myEntry?.status || "PENDING",
     progress: myEntry?.progress ?? 0,
+    note: "",                                    // ← ADD
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState("");
+  const [error, setError] = useState("");
+
+  // BUG FIX: was calling getMyEntry() (local fn) inside useEffect;
+  // just use the prop directly and reset note on task change
+  useEffect(() => {
+    const entry = task.assignees?.find((a) => (a.user?._id || a.user) === currentUserId);
+    setForm({
+      status: entry?.status || "PENDING",
+      progress: entry?.progress ?? 0,
+      note: "",                                  // ← reset note on task change
+    });
+  }, [task, currentUserId]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true); setError("");
     try {
-      await api.patch(`/tasks/${task._id}/my-progress`, form);
+      await api.patch(`/tasks/${task._id}/my-progress`, form); // note goes in body automatically
       onUpdated(); onClose();
     } catch (err) {
       setError(err.response?.data?.message || "Error updating progress");
@@ -917,16 +1034,32 @@ function MyProgressModal({ task, currentUserId, onClose, onUpdated }) {
               {statusOptions.map((s) => <option key={s}>{s}</option>)}
             </select>
           </div>
+
           <div className="form-group">
             <label>My Progress: {form.progress}%</label>
             <input type="range" min={0} max={100} value={form.progress}
               onChange={(e) => setForm({ ...form, progress: +e.target.value })} />
             <div className="progress-bar" style={{ marginTop: 6 }}>
-              <div className={`progress-fill ${progressFillClass(form.progress)}`} style={{ width: `${form.progress}%` }} />
+              <div className={`progress-fill ${progressFillClass(form.progress)}`}
+                style={{ width: `${form.progress}%` }} />
             </div>
           </div>
 
-          {/* Show other assignees (read-only) */}
+          {/* ── ADD: Optional work note ───────────────────────────────── */}
+          <div className="form-group">
+            <label>
+              Work Note <span style={{ fontWeight: 400, fontSize: 12, color: "var(--text-3)" }}>(optional)</span>
+            </label>
+            <textarea
+              value={form.note}
+              onChange={(e) => setForm({ ...form, note: e.target.value })}
+              placeholder="Describe what you worked on, any blockers, or notes for the team…"
+              rows={3}
+            />
+          </div>
+          {/* ─────────────────────────────────────────────────────────── */}
+
+          {/* Show other assignees (read-only) — unchanged */}
           {task.assignees?.length > 1 && (
             <div style={{ marginBottom: 16 }}>
               <p style={{ fontSize: 12, fontWeight: 700, color: "var(--text-3)", marginBottom: 8, textTransform: "uppercase", letterSpacing: ".04em" }}>
@@ -936,14 +1069,9 @@ function MyProgressModal({ task, currentUserId, onClose, onUpdated }) {
                 {task.assignees
                   .filter((a) => (a.user?._id || a.user) !== currentUserId)
                   .map((a, i) => (
-                    <div key={i} style={{
-                      background: "var(--bg2)", border: "1px solid var(--border)",
-                      borderRadius: 8, padding: "7px 10px",
-                    }}>
+                    <div key={i} style={{ background: "var(--bg2)", border: "1px solid var(--border)", borderRadius: 8, padding: "7px 10px" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>
-                          {a.user?.name || "Employee"}
-                        </span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>{a.user?.name || "Employee"}</span>
                         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                           <span className={`badge ${statusColors[a.status]}`} style={{ fontSize: 10, padding: "1px 6px" }}>
                             {a.status?.replace(/_/g, " ")}
@@ -973,22 +1101,108 @@ function MyProgressModal({ task, currentUserId, onClose, onUpdated }) {
 }
 
 // ─── Logs Modal ────────────────────────────────────────────────────────────────
+// function LogsModal({ task, logs, loading, canAddLog, onClose, onLogAdded }) {
+//   const [logForm, setLogForm] = useState({ message: "", progress: 0, status: "IN_PROGRESS", taskId: task._id });
+//   const [submitting, setSubmitting] = useState(false);
+
+//   // const handleAddLog = async (e) => {
+//   //   e.preventDefault();
+//   //   setSubmitting(true);
+//   //   try {
+//   //     await api.post("/logs", logForm);
+//   //     setLogForm((p) => ({ ...p, message: "" }));
+//   //     onLogAdded();
+//   //   } catch (err) {
+//   //     alert(err.response?.data?.message || "Error adding log");
+//   //   } finally { setSubmitting(false); }
+//   // };
+
+//   return (
+//     <div className="modal-overlay" onClick={onClose}>
+//       <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
+//         <div className="modal-header">
+//           <h2>Task Logs<span className="modal-subtitle"> — {task.title}</span></h2>
+//           <button className="modal-close" onClick={onClose}>✕</button>
+//         </div>
+
+//         {/* {canAddLog ? (
+//           <form className="log-form">
+//             {/* <div className="form-group">
+//               <label>Add Update</label>
+//               <textarea value={logForm.message} onChange={(e) => setLogForm({ ...logForm, message: e.target.value })}
+//                 placeholder="What did you work on?" rows={2} required />
+//             </div> */}
+//         {/* <div className="form-row">
+//                <div className="form-group">
+//                 <label>Progress: {logForm.progress}%</label>
+//                 <input type="range" min={0} max={100} value={logForm.progress}
+//                   onChange={(e) => setLogForm({ ...logForm, progress: +e.target.value })} />
+//               </div> 
+//               <div className="form-group">
+//                 <label>Status</label>
+//                 <select value={logForm.status} onChange={(e) => setLogForm({ ...logForm, status: e.target.value })}>
+//                   {statusOptions.map((s) => <option key={s}>{s}</option>)}
+//                 </select>
+//               </div>
+//             </div> 
+//             {/* <button type="submit" className="btn btn-primary" disabled={submitting}>
+//               {submitting ? <span className="spinner" /> : "Add Log Entry"}
+//             </button>
+//           </form> 
+//         ) : (
+//           <div className="logs-readonly-notice">
+//             📋 Viewing logs as read-only. Only an assigned employee can add log entries.
+//           </div>
+//         )}
+
+//         <div className="logs-divider" /> */}
+
+//         <div className="logs-list">
+//           {loading ? (
+//             <div className="loading-center"><span className="spinner" /></div>
+//           ) : logs.length === 0 ? (
+//             <p className="empty-msg">No log entries yet</p>
+//           ) : logs.map((log) => (
+//             <div key={log._id} className="log-entry">
+//               <div className="log-meta">
+//                 <span className="log-author" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+//                   <HiUser size={13} /> {log.userId?.name || "Unknown"}
+//                 </span>
+//                 <span className="log-time">{new Date(log.createdAt).toLocaleString()}</span>
+//               </div>
+//               <p className="log-message">{log.message}</p>
+
+//               {log.note && (
+//                 <p style={{
+//                   margin: "6px 0 0",
+//                   padding: "8px 10px",
+//                   background: "var(--bg2)",
+//                   border: "1px solid var(--border)",
+//                   borderRadius: 6,
+//                   fontSize: 13,
+//                   color: "var(--text)",
+//                   fontStyle: "italic",
+//                   lineHeight: 1.5,
+//                 }}>
+//                   💬 {log.note}
+//                 </p>
+//               )}
+//               <div className="log-badges">
+//                 {log.status && (
+//                   <span className={`badge ${statusColors[log.status]}`}>{log.status.replace(/_/g, " ")}</span>
+//                 )}
+//                 {log.progress !== undefined && (
+//                   <span className="text-sm text-muted">Progress: {log.progress}%</span>
+//                 )}
+//               </div>
+//             </div>
+//           ))}
+//         </div>
+//       </div>
+//     </div>
+//   );
+// }
 function LogsModal({ task, logs, loading, canAddLog, onClose, onLogAdded }) {
-  const [logForm, setLogForm] = useState({ message: "", progress: 0, status: "IN_PROGRESS", taskId: task._id });
-  const [submitting, setSubmitting] = useState(false);
-
-  const handleAddLog = async (e) => {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      await api.post("/logs", logForm);
-      setLogForm((p) => ({ ...p, message: "" }));
-      onLogAdded();
-    } catch (err) {
-      alert(err.response?.data?.message || "Error adding log");
-    } finally { setSubmitting(false); }
-  };
-
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
@@ -996,38 +1210,6 @@ function LogsModal({ task, logs, loading, canAddLog, onClose, onLogAdded }) {
           <h2>Task Logs<span className="modal-subtitle"> — {task.title}</span></h2>
           <button className="modal-close" onClick={onClose}>✕</button>
         </div>
-
-        {canAddLog ? (
-          <form onSubmit={handleAddLog} className="log-form">
-            <div className="form-group">
-              <label>Add Update</label>
-              <textarea value={logForm.message} onChange={(e) => setLogForm({ ...logForm, message: e.target.value })}
-                placeholder="What did you work on?" rows={2} required />
-            </div>
-            <div className="form-row">
-              <div className="form-group">
-                <label>Progress: {logForm.progress}%</label>
-                <input type="range" min={0} max={100} value={logForm.progress}
-                  onChange={(e) => setLogForm({ ...logForm, progress: +e.target.value })} />
-              </div>
-              <div className="form-group">
-                <label>Status</label>
-                <select value={logForm.status} onChange={(e) => setLogForm({ ...logForm, status: e.target.value })}>
-                  {statusOptions.map((s) => <option key={s}>{s}</option>)}
-                </select>
-              </div>
-            </div>
-            <button type="submit" className="btn btn-primary" disabled={submitting}>
-              {submitting ? <span className="spinner" /> : "Add Log Entry"}
-            </button>
-          </form>
-        ) : (
-          <div className="logs-readonly-notice">
-            📋 Viewing logs as read-only. Only an assigned employee can add log entries.
-          </div>
-        )}
-
-        <div className="logs-divider" />
 
         <div className="logs-list">
           {loading ? (
@@ -1042,7 +1224,25 @@ function LogsModal({ task, logs, loading, canAddLog, onClose, onLogAdded }) {
                 </span>
                 <span className="log-time">{new Date(log.createdAt).toLocaleString()}</span>
               </div>
+
               <p className="log-message">{log.message}</p>
+
+              {log.note && (
+                <p style={{
+                  margin: "6px 0 0",
+                  padding: "8px 10px",
+                  background: "var(--bg2)",
+                  border: "1px solid var(--border)",
+                  borderRadius: 6,
+                  fontSize: 13,
+                  color: "var(--text)",
+                  fontStyle: "italic",
+                  lineHeight: 1.5,
+                }}>
+                  💬 {log.note}
+                </p>
+              )}
+
               <div className="log-badges">
                 {log.status && (
                   <span className={`badge ${statusColors[log.status]}`}>{log.status.replace(/_/g, " ")}</span>

@@ -1,56 +1,80 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import socket from "../sockets/socket";
+import { useAuth } from "./AuthContext";
+import { getNotifications, markOneRead, markAllRead as markAllReadApi } from "../services/notificationService";
 
 const NotificationContext = createContext(null);
 
 export const NotificationProvider = ({ children }) => {
+  const { user } = useAuth();                                    // ← ADD: watch auth user
   const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadCount,   setUnreadCount]   = useState(0);
 
-  const addNotification = useCallback((type, data) => {
-    const n = {
-      id: Date.now(),
-      type,
-      message: data.message,
-      task: data.task,
-      taskId: data.taskId,
-      time: new Date(),
-      read: false,
-    };
-    setNotifications((prev) => [n, ...prev].slice(0, 50));
-    setUnreadCount((c) => c + 1);
+  const fetchFromDB = useCallback(async () => {
+    try {
+      const res = await getNotifications();
+      setNotifications(res.data);
+      setUnreadCount(res.data.filter((n) => !n.isRead).length);
+    } catch (err) {
+      console.error("Failed to fetch notifications:", err);
+    }
   }, []);
 
+  // ← CHANGE: run when user logs in or out, not just on mount
   useEffect(() => {
-    // Keep named handler references so we can remove exactly these listeners
-    // without accidentally removing listeners registered by other components
-    const onAssigned = (data) => addNotification("task_assigned", data);
-    const onUpdated  = (data) => addNotification("task_updated", data);
-    const onDeleted  = (data) => addNotification("task_deleted", data);
+    if (user) {
+      fetchFromDB();                                             // fetch when logged in
+    } else {
+      setNotifications([]);                                      // clear when logged out
+      setUnreadCount(0);
+    }
+  }, [user, fetchFromDB]);
 
-    socket.on("task_assigned", onAssigned);
-    socket.on("task_updated",  onUpdated);
-    socket.on("task_deleted",  onDeleted);
-
-    return () => {
-      socket.off("task_assigned", onAssigned);
-      socket.off("task_updated",  onUpdated);
-      socket.off("task_deleted",  onDeleted);
+  // Live socket delivery
+  useEffect(() => {
+    const handler = ({ notification }) => {
+      setNotifications((prev) => {
+        if (prev.some((n) => n._id === notification._id)) return prev;
+        return [notification, ...prev];
+      });
+      setUnreadCount((c) => c + 1);
     };
-  }, [addNotification]);
+    socket.on("notification", handler);
+    return () => socket.off("notification", handler);
+  }, []);
 
-  const markAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    setUnreadCount(0);
-  };
+  const markOneAsRead = useCallback(async (id) => {
+    try {
+      await markOneRead(id);
+      setNotifications((prev) =>
+        prev.map((n) => n._id === id ? { ...n, isRead: true } : n)
+      );
+      setUnreadCount((c) => Math.max(0, c - 1));
+    } catch (err) { console.error(err); }
+  }, []);
 
-  const clearAll = () => {
+  const markAllRead = useCallback(async () => {
+    try {
+      await markAllReadApi();
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      setUnreadCount(0);
+    } catch (err) { console.error(err); }
+  }, []);
+
+  const clearAll = useCallback(() => {
     setNotifications([]);
     setUnreadCount(0);
-  };
+  }, []);
 
   return (
-    <NotificationContext.Provider value={{ notifications, unreadCount, markAllRead, clearAll }}>
+    <NotificationContext.Provider value={{
+      notifications,
+      unreadCount,
+      markOneAsRead,
+      markAllRead,
+      clearAll,
+      refetch: fetchFromDB,
+    }}>
       {children}
     </NotificationContext.Provider>
   );
