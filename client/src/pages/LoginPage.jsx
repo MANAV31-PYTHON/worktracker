@@ -264,7 +264,7 @@ export default function LoginPage() {
             <div className="lp-brand-mark">
               <Zap size={24} color="white" strokeWidth={2.5} />
             </div>
-            <h1>WorkTrack</h1>
+            <h1>BOMEGROW</h1>
             <p>Employee Work Management Platform</p>
           </div>
 

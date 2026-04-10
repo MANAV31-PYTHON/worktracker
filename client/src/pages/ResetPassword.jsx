@@ -315,7 +315,7 @@ const ResetPassword = () => {
             <div className="rp-brand-mark">
               <Zap size={18} color="white" strokeWidth={2.5} />
             </div>
-            <span className="rp-brand-name">WorkTrack</span>
+            <span className="rp-brand-name">BOMEGROW</span>
           </div>
 
           {success ? (

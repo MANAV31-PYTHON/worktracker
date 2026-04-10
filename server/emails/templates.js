@@ -1,8 +1,8 @@
 /**
- * templates.js — WorkTrack transactional email templates
+ * templates.js — BOMEGROW transactional email templates
  */
 
-const APP_NAME = "WorkTrack";
+const APP_NAME = "BOMEGROW";
 const APP_URL  = process.env.APP_URL || "http://localhost:3000";
 
 // ─────────────────────────────────────────────────────────────────
@@ -260,7 +260,7 @@ const alertBox = (message, type = "info") => {
 
 /** Email verification */
 export const verificationEmail = ({ name, verifyUrl }) =>
-  base("Verify your email — WorkTrack", `
+  base("Verify your email — BOMEGROW", `
     ${greeting(name)}
     <p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 20px;">
       Thanks for signing up! Verify your email to activate your <strong>${APP_NAME}</strong> account.
@@ -275,7 +275,7 @@ export const verificationEmail = ({ name, verifyUrl }) =>
 
 /** Password reset request */
 export const passwordResetEmail = ({ name, resetURL }) =>
-  base("Reset your password — WorkTrack", `
+  base("Reset your password — BOMEGROW", `
     ${greeting(name)}
     <p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 20px;">
       We received a request to reset the password for your ${APP_NAME} account.
@@ -290,7 +290,7 @@ export const passwordResetEmail = ({ name, resetURL }) =>
 
 /** Password changed confirmation */
 export const passwordChangedEmail = ({ name }) =>
-  base("Password changed — WorkTrack", `
+  base("Password changed — BOMEGROW", `
     ${greeting(name)}
     <p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 20px;">
       Your ${APP_NAME} password was successfully changed.

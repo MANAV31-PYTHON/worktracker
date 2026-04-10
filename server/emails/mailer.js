@@ -1,5 +1,5 @@
 /**
- * mailer.js — WorkTrack email dispatch layer
+ * mailer.js — BOMEGROW email dispatch layer
  * Fire-and-forget. Never throws. Always logs.
  */
 
@@ -18,7 +18,7 @@ import {
 } from "./templates.js";
 
 const clean = (val) => (val || "").replace(/^["']|["']$/g, "").trim();
-const FROM  = clean(process.env.EMAIL_FROM) || "WorkTrack <no-reply@worktrack.app>";
+const FROM  = clean(process.env.EMAIL_FROM) || "BOMEGROW <no-reply@bomegro.com>";
 
 const safeStatus = (v) => {
   const VALID = ["PENDING", "IN_PROGRESS", "COMPLETED", "BLOCKED"];
@@ -48,7 +48,7 @@ export const sendVerificationEmail = (user, token) => {
   const verifyUrl = `${process.env.APP_URL || "http://localhost:3000"}/verify-email?token=${token}`;
   return send({
     to: user.email,
-    subject: "Verify your WorkTrack email",
+    subject: "Verify your BOMEGROW email",
     html: verificationEmail({ name: user.name, verifyUrl }),
   });
 };
@@ -56,14 +56,14 @@ export const sendVerificationEmail = (user, token) => {
 export const sendPasswordResetEmail = (user, resetURL) =>
   send({
     to: user.email,
-    subject: "Reset your WorkTrack password",
+    subject: "Reset your BOMEGROW password",
     html: passwordResetEmail({ name: user.name, resetURL }),
   });
 
 export const sendPasswordChangedEmail = (user) =>
   send({
     to: user.email,
-    subject: "Your WorkTrack password was changed",
+    subject: "Your BOMEGROW password was changed",
     html: passwordChangedEmail({ name: user.name }),
   });
 
@@ -79,7 +79,7 @@ export const sendTaskAssignedToEmployee = (employee, assignedByName, task) =>
 export const sendTaskAssignedToSuperAdmin = (superAdmin, assignedByName, employeeName, task) =>
   send({
     to: superAdmin.email,
-    subject: `[WorkTrack] Task assigned: "${task.title}"`,
+    subject: `[BOMEGROW] Task assigned: "${task.title}"`,
     html: taskAssignedAdminEmail({
       superAdminName: superAdmin.name,
       assignedByName,

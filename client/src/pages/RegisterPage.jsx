@@ -26,7 +26,7 @@ export default function RegisterPage() {
       <div className="auth-card">
         <div className="auth-brand">
           <div className="brand-mark"><Zap size={22} color="white" strokeWidth={2.5}/></div>
-          <h1>WorkTrack</h1>
+          <h1>BOMEGROW</h1>
           <p>Employee Work Management Platform</p>
         </div>
         <form onSubmit={handleSubmit} className="auth-form">

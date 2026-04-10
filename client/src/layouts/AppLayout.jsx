@@ -47,7 +47,7 @@ export default function AppLayout() {
           <div className="brand-mark">
             <Zap size={17} color="white" strokeWidth={2.5} />
           </div>
-          <span className="brand-name">WorkTrack</span>
+          <span className="brand-name">BOMEGROW</span>
         </div>
 
         <p className="sidebar-section-label">Navigation</p>
@@ -93,7 +93,7 @@ export default function AppLayout() {
               <Menu size={20} strokeWidth={2} />
             </button>
             <div className="topbar-breadcrumb">
-              WorkTrack
+              BOMEGROW
               {crumb && (
                 <>
                   <ChevronRight size={13} color="var(--text-4)" strokeWidth={2} />
