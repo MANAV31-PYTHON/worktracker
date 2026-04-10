@@ -8,7 +8,7 @@ const users = new Map();
 export const initSocket = (server) => {
   io = new Server(server, {
     cors: {
-      origin: ["http://localhost:3000", "http://localhost:5173"],
+      origin: ["http://localhost:3000", "http://localhost:5173", process.env.CLIENT_URL],
       methods: ["GET", "POST"],
       credentials: true,
     },
