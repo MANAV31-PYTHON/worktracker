@@ -1,4 +1,5 @@
 import Attendance from "../models/attendance.model.js";
+import User from "../models/user.model.js";
 
 const getUTCDateKey = (date = new Date()) => {
   const y = date.getUTCFullYear();
@@ -47,3 +48,30 @@ export const getMyAttendanceHistory = async (userId, limit = 14) => {
   return Attendance.find({ user: userId }).sort({ dateKey: -1 }).limit(safeLimit);
 };
 
+const ensureEmployee = async (userId) => {
+  const user = await User.findById(userId).select("name role isActive");
+  if (!user) throw new Error("Employee not found");
+  if (user.role !== "EMPLOYEE") throw new Error("Attendance can only be marked for employees");
+  if (!user.isActive) throw new Error("Cannot mark attendance for inactive employee");
+  return user;
+};
+
+export const clockInForEmployee = async (employeeId) => {
+  await ensureEmployee(employeeId);
+  return clockIn(employeeId);
+};
+
+export const clockOutForEmployee = async (employeeId) => {
+  await ensureEmployee(employeeId);
+  return clockOut(employeeId);
+};
+
+export const getEmployeeTodayAttendance = async (employeeId) => {
+  await ensureEmployee(employeeId);
+  return getTodayAttendance(employeeId);
+};
+
+export const getEmployeeAttendanceHistory = async (employeeId, limit = 14) => {
+  await ensureEmployee(employeeId);
+  return getMyAttendanceHistory(employeeId, limit);
+};

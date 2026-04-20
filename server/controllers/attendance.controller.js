@@ -1,6 +1,10 @@
 import {
   clockIn,
   clockOut,
+  clockInForEmployee,
+  clockOutForEmployee,
+  getEmployeeAttendanceHistory,
+  getEmployeeTodayAttendance,
   getMyAttendanceHistory,
   getTodayAttendance,
 } from "../services/attendance.service.js";
@@ -41,3 +45,38 @@ export const myAttendanceHistory = async (req, res) => {
   }
 };
 
+export const markEmployeeClockIn = async (req, res) => {
+  try {
+    const record = await clockInForEmployee(req.params.userId);
+    res.status(201).json(record);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};
+
+export const markEmployeeClockOut = async (req, res) => {
+  try {
+    const record = await clockOutForEmployee(req.params.userId);
+    res.json(record);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};
+
+export const employeeTodayAttendance = async (req, res) => {
+  try {
+    const record = await getEmployeeTodayAttendance(req.params.userId);
+    res.json(record);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};
+
+export const employeeAttendanceHistory = async (req, res) => {
+  try {
+    const records = await getEmployeeAttendanceHistory(req.params.userId, req.query.limit);
+    res.json(records);
+  } catch (err) {
+    res.status(400).json({ message: err.message });
+  }
+};
