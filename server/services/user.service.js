@@ -146,9 +146,18 @@ export const forgotPassword = async (email) => {
     }
   );
 
-  const resetURL = `${process.env.APP_URL || "http://localhost:5173"}/reset-password/${resetToken}`;
+  const resetURL = `${process.env.APP_URL || "http://localhost:3000"}/reset-password/${resetToken}`;
 
-  await sendPasswordResetEmail(user, resetURL);
+  const mailResult = await sendPasswordResetEmail(user, resetURL);
+  if (!mailResult?.ok) {
+    if (mailResult.reason === "NOT_CONFIGURED") {
+      throw new Error("Email is not configured. Set EMAIL_USER and EMAIL_PASS in .env");
+    }
+    if (mailResult.reason === "SEND_FAILED") {
+      throw new Error("Email send failed. For Gmail, use 2-Step Verification + App Password.");
+    }
+    throw new Error("Password reset email could not be sent.");
+  }
 
 return { message: "Password reset email sent" };
 };

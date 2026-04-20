@@ -4,7 +4,7 @@ import { useNotifications } from "../context/NotificationContext";
 import { useState } from "react";
 import {
   LayoutDashboard, ClipboardList, Users, Building2,
-  Bell, LogOut, Menu, ChevronRight, Zap,
+  Bell, LogOut, Menu, ChevronRight, Zap, Clock3,
 } from "lucide-react";
 
 const NAV = [
@@ -13,11 +13,12 @@ const NAV = [
   { path:"/users",         label:"Users",          Icon:Users,           roles:["SUPER_ADMIN","ADMIN"] },
   { path:"/departments",   label:"Departments",    Icon:Building2,       roles:["SUPER_ADMIN","ADMIN"] },
   { path:"/notifications", label:"Notifications",  Icon:Bell,            roles:["SUPER_ADMIN","ADMIN","EMPLOYEE"] },
+  { path:"/attendance",    label:"Attendance",     Icon:Clock3,          roles:["SUPER_ADMIN","ADMIN","EMPLOYEE"] },
 ];
 
 const PAGE_TITLES = {
   "/dashboard":"/Dashboard", "/tasks":"/Tasks", "/users":"/Users",
-  "/departments":"/Departments", "/notifications":"/Notifications",
+  "/departments":"/Departments", "/notifications":"/Notifications", "/attendance":"/Attendance",
 };
 
 const ROLE_COLORS = {

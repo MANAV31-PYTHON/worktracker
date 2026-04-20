@@ -10,6 +10,7 @@ import UsersPage from "./pages/UsersPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import DepartmentsPage from "./pages/DepartmentsPage";
 import ResetPassword from "./pages/ResetPassword"
+import AttendancePage from "./pages/AttendancePage";
 import "./App.css";
 import { DialogProvider } from "./components/Dialog";
 
@@ -29,6 +30,7 @@ function App() {
               <Route path="/users" element={<UsersPage />} />
               <Route path="/departments" element={<DepartmentsPage />} />
               <Route path="/notifications" element={<NotificationsPage />} />
+              <Route path="/attendance" element={<AttendancePage />} />
             </Route>
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>

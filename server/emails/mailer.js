@@ -1,9 +1,9 @@
 /**
- * mailer.js — BOMEGROW email dispatch layer
- * Fire-and-forget. Never throws. Always logs.
+ * mailer.js - BOMEGROW email dispatch layer
+ * Returns send status so callers can handle failures.
  */
 
-import transporter from "../config/email.js";
+import transporter, { EMAIL_USER, EMAIL_PASS } from "../config/email.js";
 import {
   verificationEmail,
   taskAssignedEmail,
@@ -18,7 +18,7 @@ import {
 } from "./templates.js";
 
 const clean = (val) => (val || "").replace(/^["']|["']$/g, "").trim();
-const FROM  = clean(process.env.EMAIL_FROM) || "BOMEGROW <no-reply@bomegro.com>";
+const FROM = clean(process.env.EMAIL_FROM) || "BOMEGROW <no-reply@bomegro.com>";
 
 const safeStatus = (v) => {
   const VALID = ["PENDING", "IN_PROGRESS", "COMPLETED", "BLOCKED"];
@@ -26,23 +26,25 @@ const safeStatus = (v) => {
 };
 
 const send = async ({ to, subject, html }) => {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.warn(`⚠️  [Mailer] Not configured — skipping: ${to}`);
-    return;
+  if (!EMAIL_USER || !EMAIL_PASS) {
+    console.warn(`[Mailer] Not configured - skipping: ${to}`);
+    return { ok: false, reason: "NOT_CONFIGURED" };
   }
+
   if (!to) {
-    console.warn("⚠️  [Mailer] No recipient — skipping.");
-    return;
+    console.warn("[Mailer] No recipient - skipping.");
+    return { ok: false, reason: "NO_RECIPIENT" };
   }
+
   try {
     const info = await transporter.sendMail({ from: FROM, to, subject, html });
-    console.log(`📧 [Mailer] Sent to ${to} — id: ${info.messageId}`);
+    console.log(`[Mailer] Sent to ${to} - id: ${info.messageId}`);
+    return { ok: true, messageId: info.messageId };
   } catch (err) {
-    console.error(`❌ [Mailer] Failed to ${to} — "${subject}" — ${err.message}`);
+    console.error(`[Mailer] Failed to ${to} - \"${subject}\" - ${err.message}`);
+    return { ok: false, reason: "SEND_FAILED", error: err.message };
   }
 };
-
-// ── Auth ──────────────────────────────────────────────────────────────────────
 
 export const sendVerificationEmail = (user, token) => {
   const verifyUrl = `${process.env.APP_URL || "http://localhost:3000"}/verify-email?token=${token}`;
@@ -67,8 +69,6 @@ export const sendPasswordChangedEmail = (user) =>
     html: passwordChangedEmail({ name: user.name }),
   });
 
-// ── Task ──────────────────────────────────────────────────────────────────────
-
 export const sendTaskAssignedToEmployee = (employee, assignedByName, task) =>
   send({
     to: employee.email,
@@ -88,23 +88,14 @@ export const sendTaskAssignedToSuperAdmin = (superAdmin, assignedByName, employe
     }),
   });
 
-/**
- * sendTaskUpdatedToAdmin
- *
- * Single entry point for all admin update emails.
- * Automatically routes to taskCompletedEmail when overallStatus = COMPLETED,
- * otherwise sends taskUpdatedAdminEmail (no diff / "What Changed" section).
- *
- * Works with both Mongoose documents and plain objects.
- */
 export const sendTaskUpdatedToAdmin = (admin, employeeName, task, _oldStatus, _oldProgress) => {
   const effectiveStatus = safeStatus(task?.overallStatus ?? task?.status);
-  const isCompleted     = effectiveStatus === "COMPLETED";
+  const isCompleted = effectiveStatus === "COMPLETED";
 
   if (isCompleted) {
     return send({
       to: admin.email,
-      subject: `✅ Task completed: "${task.title}"`,
+      subject: `Task completed: "${task.title}"`,
       html: taskCompletedEmail({
         recipientName: admin.name,
         employeeName,
@@ -120,8 +111,6 @@ export const sendTaskUpdatedToAdmin = (admin, employeeName, task, _oldStatus, _o
       adminName: admin.name,
       employeeName,
       task,
-      // oldStatus and oldProgress intentionally NOT passed —
-      // "What Changed" section has been removed from the template.
     }),
   });
 };
