@@ -5,7 +5,9 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, CartesianGrid,
 } from "recharts";
-import { ClipboardList, Zap, CheckCircle2, Clock, Ban } from "lucide-react";
+import {
+  ClipboardList, Zap, CheckCircle2, Clock, Ban, ShieldCheck, Building2, CalendarDays,
+} from "lucide-react";
 
 const STATUS_COLORS = {
   PENDING:     "#f59e0b",
@@ -14,6 +16,25 @@ const STATUS_COLORS = {
   BLOCKED:     "#dc2626",
 };
 const PIE_COLORS = ["#f59e0b","#2563eb","#059669","#dc2626"];
+const ROLE_BADGE_COLORS = {
+  SUPER_ADMIN: { bg: "var(--purple-bg)", color: "var(--purple)", border: "var(--purple-b)" },
+  ADMIN: { bg: "var(--accent-bg)", color: "var(--accent-text)", border: "var(--accent-bg2)" },
+  EMPLOYEE: { bg: "var(--green-bg)", color: "var(--green)", border: "var(--green-b)" },
+};
+const SUB_STATUS_COLORS = {
+  active: { bg: "var(--green-bg)", color: "var(--green)", border: "var(--green-b)" },
+  trialing: { bg: "var(--accent-bg)", color: "var(--accent-text)", border: "var(--accent-bg2)" },
+  past_due: { bg: "var(--amber-bg)", color: "var(--amber)", border: "var(--amber-b)" },
+  cancelled: { bg: "var(--red-bg)", color: "var(--red)", border: "var(--red-b)" },
+  expired: { bg: "var(--red-bg)", color: "var(--red)", border: "var(--red-b)" },
+};
+
+const formatDate = (value) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString();
+};
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -38,6 +59,8 @@ export default function DashboardPage() {
   const [allTasks, setAllTasks]   = useState([]);
   const [users, setUsers]         = useState([]);
   const [depts, setDepts]         = useState([]);
+  const [subscriptionInfo, setSubscriptionInfo] = useState(null);
+  const [subscriptionError, setSubscriptionError] = useState("");
   const [loading, setLoading]     = useState(true);
   const [selectedDept, setSelectedDept] = useState("ALL"); // "ALL" or dept._id
 
@@ -49,6 +72,14 @@ export default function DashboardPage() {
         const results = await Promise.all(reqs);
         setAllTasks(results[0].data);
         if (isAdmin) { setUsers(results[1].data); setDepts(results[2].data); }
+        try {
+          const subRes = await api.get("/subscriptions/overview");
+          setSubscriptionInfo(subRes.data);
+          setSubscriptionError("");
+        } catch (subErr) {
+          setSubscriptionInfo(null);
+          setSubscriptionError(subErr?.response?.data?.message || "Subscription data unavailable");
+        }
       } catch (err) { console.error(err); }
       finally { setLoading(false); }
     };
@@ -121,6 +152,12 @@ export default function DashboardPage() {
     .sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt))
     .slice(0, 6);
 
+  const role = user?.role || "EMPLOYEE";
+  const roleStyle = ROLE_BADGE_COLORS[role] || ROLE_BADGE_COLORS.EMPLOYEE;
+  const roleLabel = role.replace(/_/g, " ");
+  const subStatus = subscriptionInfo?.subscription?.status || "";
+  const subStatusStyle = SUB_STATUS_COLORS[subStatus] || SUB_STATUS_COLORS.trialing;
+
   if (loading) {
     return <div className="page"><div className="loading-center"><span className="spinner lg"/></div></div>;
   }
@@ -143,6 +180,19 @@ export default function DashboardPage() {
                 border:"1px solid var(--accent-bg2)"
               }}>
                 🏢 {activeDept.name}
+              </span>
+            )}
+          </div>
+          <div className="dashboard-header-badges">
+            <span
+              className="dashboard-role-badge"
+              style={{ background: roleStyle.bg, color: roleStyle.color, borderColor: roleStyle.border }}
+            >
+              <ShieldCheck size={13} /> Role: {roleLabel}
+            </span>
+            {subscriptionInfo?.subscription?.planName && (
+              <span className="dashboard-plan-pill">
+                Plan: {subscriptionInfo.subscription.planName}
               </span>
             )}
           </div>
@@ -180,6 +230,63 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
+      </div>
+
+      <div className="card anim-fade-up subscription-card" style={{ animationDelay:"40ms" }}>
+        <div className="card-header">
+          <h3>Company Subscription</h3>
+          {subStatus && (
+            <span
+              className="dashboard-role-badge"
+              style={{
+                background: subStatusStyle.bg,
+                color: subStatusStyle.color,
+                borderColor: subStatusStyle.border,
+              }}
+            >
+              {subStatus.replace(/_/g, " ")}
+            </span>
+          )}
+        </div>
+        <div className="card-body">
+          {!subscriptionInfo && (
+            <p className="text-muted text-sm">
+              {subscriptionError || "No subscription found for this account yet."}
+            </p>
+          )}
+          {subscriptionInfo && (
+            <div className="subscription-grid">
+              <div className="subscription-cell">
+                <p className="subscription-label"><Building2 size={14} /> Company Name</p>
+                <p className="subscription-value">{subscriptionInfo.company?.name || "-"}</p>
+              </div>
+              <div className="subscription-cell">
+                <p className="subscription-label">GST Number</p>
+                <p className="subscription-value">{subscriptionInfo.company?.gstNumber || "-"}</p>
+              </div>
+              <div className="subscription-cell subscription-cell-wide">
+                <p className="subscription-label">Address</p>
+                <p className="subscription-value">{subscriptionInfo.company?.address || "-"}</p>
+              </div>
+              <div className="subscription-cell">
+                <p className="subscription-label"><CalendarDays size={14} /> Start Date</p>
+                <p className="subscription-value">{formatDate(subscriptionInfo.subscription?.startDate)}</p>
+              </div>
+              <div className="subscription-cell">
+                <p className="subscription-label"><CalendarDays size={14} /> End Date</p>
+                <p className="subscription-value">{formatDate(subscriptionInfo.subscription?.endDate)}</p>
+              </div>
+              <div className="subscription-cell">
+                <p className="subscription-label">Next Billing</p>
+                <p className="subscription-value">{formatDate(subscriptionInfo.subscription?.nextBillingDate)}</p>
+              </div>
+              <div className="subscription-cell">
+                <p className="subscription-label">Payment Provider</p>
+                <p className="subscription-value">{subscriptionInfo.subscription?.paymentProvider || "-"}</p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Stat cards */}

@@ -9,6 +9,8 @@
  */
 
 import TaskLog from "../models/taskLog.model.js";
+import Task from "../models/task.model.js";
+import User from "../models/user.model.js";
 
 /**
  * Write one log entry and return it.
@@ -21,7 +23,13 @@ export const createLog = async ({ taskId, userId, message, progress, status }) =
 /**
  * Fetch all logs for a task, newest first.
  */
-export const getTaskLogs = async (taskId) => {
+export const getTaskLogs = async (taskId, currentUser) => {
+  const actor = await User.findById(currentUser.id).select("companyId");
+  if (!actor || !actor.companyId) throw new Error("Not allowed");
+
+  const task = await Task.findOne({ _id: taskId, companyId: actor.companyId }).select("_id");
+  if (!task) throw new Error("Task not found");
+
   return TaskLog.find({ taskId })
     .populate("userId", "name role")
     .sort({ createdAt: -1 });

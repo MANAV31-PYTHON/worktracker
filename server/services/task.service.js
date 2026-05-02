@@ -53,20 +53,35 @@ const toPayload = (doc) => ({
   overallProgress: doc.overallProgress,
 });
 
+const getActor = async (currentUser) => {
+  const actor = await User.findById(currentUser.id).select("role companyId name");
+  if (!actor) throw new Error("Current user not found");
+  if (!actor.companyId) throw new Error("Your account is not linked to any company");
+  return actor;
+};
+
+const ensureTaskInCompany = (task, actor) => {
+  if (!task) throw new Error("Task not found");
+  if (!task.companyId || task.companyId.toString() !== actor.companyId.toString()) {
+    throw new Error("Task not found");
+  }
+};
+
 // ─────────────────────────────────────────────────────────────────
 // CREATE TASK
 // ─────────────────────────────────────────────────────────────────
 export const createTask = async (data, currentUser) => {
   const { title, description, assignedTo, priority, deadline } = data;
+  const actor = await getActor(currentUser);
 
   if (!title || !assignedTo) throw new Error("Title and assignedTo are required");
-  if (!["ADMIN", "SUPER_ADMIN"].includes(currentUser.role))
+  if (!["ADMIN", "SUPER_ADMIN"].includes(actor.role))
     throw new Error("Not authorized to assign tasks");
 
   const ids = Array.isArray(assignedTo) ? assignedTo : [assignedTo];
   if (!ids.length) throw new Error("At least one employee must be assigned");
 
-  const employees = await User.find({ _id: { $in: ids } });
+  const employees = await User.find({ _id: { $in: ids }, companyId: actor.companyId });
   if (employees.length !== ids.length) throw new Error("One or more employees not found");
   if (employees.some((e) => e.role !== "EMPLOYEE"))
     throw new Error("Tasks can only be assigned to employees");
@@ -77,6 +92,7 @@ export const createTask = async (data, currentUser) => {
   const task = await Task.create({
     title, description, assignees,
     assignedBy: currentUser.id,
+    companyId: actor.companyId,
     priority: priority || "MEDIUM",
     deadline: deadline || null,
     overallStatus, overallProgress,
@@ -110,7 +126,11 @@ export const createTask = async (data, currentUser) => {
 
   // Super admins — broadcast via role socket (they are online-only oversight)
   // Also save individually to DB so they see it on next login
-  const superAdmins = await User.find({ role: "SUPER_ADMIN", _id: { $ne: currentUser.id } });
+  const superAdmins = await User.find({
+    role: "SUPER_ADMIN",
+    companyId: actor.companyId,
+    _id: { $ne: currentUser.id },
+  });
   await Promise.all(superAdmins.map((sa) =>
     notify({
       userId: sa._id,
@@ -133,13 +153,14 @@ export const createTask = async (data, currentUser) => {
 // GET TASKS
 // ─────────────────────────────────────────────────────────────────
 export const getTasks = async (currentUser) => {
-  const base = { isDeleted: false };
+  const actor = await getActor(currentUser);
+  const base = { isDeleted: false, companyId: actor.companyId };
   const sort = { createdAt: -1 };
-  if (currentUser.role === "SUPER_ADMIN")
+  if (actor.role === "SUPER_ADMIN")
     return Task.find(base).populate(POPULATE).sort(sort);
-  if (currentUser.role === "ADMIN")
+  if (actor.role === "ADMIN")
     return Task.find({ ...base, assignedBy: currentUser.id }).populate(POPULATE).sort(sort);
-  if (currentUser.role === "EMPLOYEE")
+  if (actor.role === "EMPLOYEE")
     return Task.find({ ...base, "assignees.user": currentUser.id }).populate(POPULATE).sort(sort);
   throw new Error("Invalid role");
 };
@@ -148,11 +169,13 @@ export const getTasks = async (currentUser) => {
 // UPDATE TASK  (admin edits metadata / reassigns employees)
 // ─────────────────────────────────────────────────────────────────
 export const updateTask = async (taskId, data, currentUser) => {
+  const actor = await getActor(currentUser);
   const task = await Task.findById(taskId);
-  if (!task || task.isDeleted) throw new Error("Task not found");
-  if (!["ADMIN", "SUPER_ADMIN"].includes(currentUser.role))
+  ensureTaskInCompany(task, actor);
+  if (task.isDeleted) throw new Error("Task not found");
+  if (!["ADMIN", "SUPER_ADMIN"].includes(actor.role))
     throw new Error("Use the my-progress endpoint to update your progress");
-  if (currentUser.role === "ADMIN" && task.assignedBy.toString() !== currentUser.id)
+  if (actor.role === "ADMIN" && task.assignedBy.toString() !== currentUser.id)
     throw new Error("Not allowed to update this task");
 
   const oldStatus = task.overallStatus;
@@ -167,7 +190,7 @@ export const updateTask = async (taskId, data, currentUser) => {
   if (assignedTo !== undefined) {
     const ids = Array.isArray(assignedTo) ? assignedTo : [assignedTo];
     if (!ids.length) throw new Error("At least one employee must be assigned");
-    const emps = await User.find({ _id: { $in: ids } });
+    const emps = await User.find({ _id: { $in: ids }, companyId: actor.companyId });
     if (emps.length !== ids.length) throw new Error("One or more employees not found");
     if (emps.some((e) => e.role !== "EMPLOYEE"))
       throw new Error("Tasks can only be assigned to employees");
@@ -202,7 +225,7 @@ export const updateTask = async (taskId, data, currentUser) => {
     const assignedByName = populated.assignedBy?.name || "Admin";
 
     // Notify assignees
-    if (currentUser.role !== "SUPER_ADMIN") {
+    if (actor.role !== "SUPER_ADMIN") {
       const assigneeIds = task.assignees.map((a) => a.user.toString());
       const assignees = await User.find({ _id: { $in: assigneeIds } });
       await Promise.all(assigneeIds.map((id) =>
@@ -217,8 +240,8 @@ export const updateTask = async (taskId, data, currentUser) => {
     }
 
     // Notify super admins
-    if (currentUser.role === "ADMIN") {
-      const superAdmins = await User.find({ role: "SUPER_ADMIN" });
+    if (actor.role === "ADMIN") {
+      const superAdmins = await User.find({ role: "SUPER_ADMIN", companyId: actor.companyId });
       await Promise.all(superAdmins.map((sa) =>
         notify({
           userId: sa._id,
@@ -240,8 +263,10 @@ export const updateTask = async (taskId, data, currentUser) => {
 // UPDATE MY PROGRESS  (employee updates their own assignee entry)
 // ─────────────────────────────────────────────────────────────────
 export const updateMyProgress = async (taskId, data, currentUser) => {
+  const actor = await getActor(currentUser);
   const task = await Task.findById(taskId);
-  if (!task || task.isDeleted) throw new Error("Task not found");
+  ensureTaskInCompany(task, actor);
+  if (task.isDeleted) throw new Error("Task not found");
 
   const entry = task.assignees.find((a) => a.user.toString() === currentUser.id);
   if (!entry) throw new Error("You are not assigned to this task");
@@ -313,7 +338,7 @@ export const updateMyProgress = async (taskId, data, currentUser) => {
   }
 
   // ── 3. Super admins ───────────────────────────────────────────────────────
-  const superAdmins = await User.find({ role: "SUPER_ADMIN" });
+  const superAdmins = await User.find({ role: "SUPER_ADMIN", companyId: actor.companyId });
   await Promise.all(superAdmins.map(async (sa) => {
     const saId = sa._id.toString();
     const saMsg = isOverallComplete
@@ -339,10 +364,11 @@ export const updateMyProgress = async (taskId, data, currentUser) => {
 // DELETE TASK
 // ─────────────────────────────────────────────────────────────────
 export const deleteTask = async (taskId, currentUser) => {
+  const actor = await getActor(currentUser);
   const task = await Task.findById(taskId);
-  if (!task) throw new Error("Task not found");
+  ensureTaskInCompany(task, actor);
   if (task.isDeleted) throw new Error("Task already deleted");
-  if (currentUser.role === "ADMIN" && task.assignedBy.toString() !== currentUser.id)
+  if (actor.role === "ADMIN" && task.assignedBy.toString() !== currentUser.id)
     throw new Error("Not allowed to delete this task");
 
   const populated = await getPopulated(taskId);
@@ -374,7 +400,7 @@ export const deleteTask = async (taskId, currentUser) => {
   ));
 
   // Notify assigning admin when super admin deletes
-  if (currentUser.role === "SUPER_ADMIN") {
+  if (actor.role === "SUPER_ADMIN") {
     await notify({
       userId: adminId,
       message: `Your task "${task.title}" was removed by a Super Admin`,
@@ -384,8 +410,8 @@ export const deleteTask = async (taskId, currentUser) => {
   }
 
   // Notify super admins when admin deletes
-  if (currentUser.role === "ADMIN") {
-    const superAdmins = await User.find({ role: "SUPER_ADMIN" });
+  if (actor.role === "ADMIN") {
+    const superAdmins = await User.find({ role: "SUPER_ADMIN", companyId: actor.companyId });
     await Promise.all(superAdmins.map((sa) =>
       notify({
         userId: sa._id,
@@ -400,14 +426,14 @@ export const deleteTask = async (taskId, currentUser) => {
   const assignees = await User.find({ _id: { $in: task.assignees.map((a) => a.user) } });
   assignees.forEach((emp) => sendTaskDeletedToEmployee(emp, task.title));
 
-  if (currentUser.role === "SUPER_ADMIN") {
+  if (actor.role === "SUPER_ADMIN") {
     const assigningAdmin = await User.findById(adminId);
     if (assigningAdmin?.role === "ADMIN")
       sendTaskDeletedToAdmin(assigningAdmin, task.title, employeeNames);
   }
 
-  if (currentUser.role === "ADMIN") {
-    const superAdmins = await User.find({ role: "SUPER_ADMIN" });
+  if (actor.role === "ADMIN") {
+    const superAdmins = await User.find({ role: "SUPER_ADMIN", companyId: actor.companyId });
     superAdmins.forEach((sa) => sendTaskDeletedToAdmin(sa, task.title, employeeNames));
   }
 

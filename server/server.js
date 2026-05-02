@@ -10,6 +10,8 @@ import express from "express";
 import connectDB from "./config/db.js";
 import { initSocket } from "./sockets/socket.js";
 import { seedSuperAdmin } from "./seeders/superAdmin.seeder.js";
+import { startSubscriptionExpiryReminderJob } from "./services/subscriptionReminder.service.js";
+import { ensureOwnerLifetimeAccess } from "./services/ownerSubscription.service.js";
 
 const PORT = process.env.PORT || 5000;
 
@@ -40,8 +42,10 @@ if (process.env.NODE_ENV === "production") {
 }
 
 // DB
-connectDB().then(() => {
-  seedSuperAdmin();
+connectDB().then(async () => {
+  await seedSuperAdmin();
+  await ensureOwnerLifetimeAccess();
+  startSubscriptionExpiryReminderJob();
 });
 
 // Start server

@@ -1,10 +1,12 @@
 import User from "../models/user.model.js";
+import Company from "../models/company.model.js";
 
 export const seedSuperAdmin = async () => {
   try {
     const email = process.env.SUPER_ADMIN_EMAIL;
     const password = process.env.SUPER_ADMIN_PASSWORD;
     const name = process.env.SUPER_ADMIN_NAME || "Super Admin";
+    const configuredCompanyId = (process.env.SUPER_ADMIN_COMPANY_ID || "").trim();
 
     if (!email || !password) {
       console.warn(
@@ -14,6 +16,16 @@ export const seedSuperAdmin = async () => {
     }
 
     const existing = await User.findOne({ email }).select("+password");
+    let resolvedCompanyId = null;
+
+    if (configuredCompanyId) {
+      const company = await Company.findById(configuredCompanyId).select("_id");
+      if (!company) {
+        console.warn("⚠️  SUPER_ADMIN_COMPANY_ID is set but company was not found");
+      } else {
+        resolvedCompanyId = company._id;
+      }
+    }
 
     if (existing) {
       let updated = false;
@@ -25,6 +37,14 @@ export const seedSuperAdmin = async () => {
       // Ensure role is SUPER_ADMIN
       if (existing.role !== "SUPER_ADMIN") {
         existing.role = "SUPER_ADMIN";
+        updated = true;
+      }
+
+      if (
+        resolvedCompanyId &&
+        (!existing.companyId || existing.companyId.toString() !== resolvedCompanyId.toString())
+      ) {
+        existing.companyId = resolvedCompanyId;
         updated = true;
       }
 
@@ -44,6 +64,7 @@ export const seedSuperAdmin = async () => {
       email,
       password, // will be hashed automatically
       role: "SUPER_ADMIN",
+      companyId: resolvedCompanyId,
     });
 
     console.log(`🌱 Super admin seeded: ${email}`);

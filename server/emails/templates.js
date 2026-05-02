@@ -306,6 +306,45 @@ export const passwordChangedEmail = ({ name }) =>
     </p>
   `);
 
+/** Employee welcome + temporary credentials */
+export const employeeWelcomeEmail = ({
+  employeeName,
+  createdByName,
+  loginEmail,
+  temporaryPassword,
+  loginUrl,
+  resetURL,
+}) =>
+  base("Welcome to BOMEGROW — Your account details", `
+    ${greeting(employeeName)}
+    <p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 16px;">
+      Your account has been created by <strong>${safe(createdByName, "your administrator")}</strong>.
+      Please login and reset your password immediately.
+    </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+           style="background:#f7f8fc;border:1px solid #e2e5f1;border-radius:10px;margin:18px 0 10px;">
+      <tr>
+        <td style="padding:16px 18px;">
+          <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">Login Email</p>
+          <p style="margin:0 0 14px;font-size:15px;font-weight:700;color:#111827;">${safe(loginEmail, "-")}</p>
+          <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">Temporary Password</p>
+          <p style="margin:0;font-size:15px;font-weight:700;color:#111827;">${safe(temporaryPassword, "-")}</p>
+        </td>
+      </tr>
+    </table>
+
+    ${alertBox("For security, reset your password before you start using the platform.", "warning")}
+
+    ${ctaButton("Login to BOMEGROW", loginUrl)}
+    ${ctaButton("Reset Password", resetURL)}
+
+    ${divider()}
+    <p style="font-size:13px;color:#6b7280;line-height:1.7;margin:0;">
+      Website: <a href="${APP_URL}" style="color:#3b55e0;text-decoration:none;">${APP_URL}</a>
+    </p>
+  `);
+
 /** Task assigned → employee */
 export const taskAssignedEmail = ({ employeeName, assignedByName, task }) =>
   base(`New task assigned: ${safe(task?.title, "a task")}`, `
@@ -387,4 +426,78 @@ export const taskDeletedAdminEmail = ({ adminName, taskTitle, employeeName }) =>
       has been removed by a Super Admin.
     </p>
     ${ctaButton("View All Tasks", `${APP_URL}/tasks`)}
+  `);
+
+/** Subscription expiry reminder -> super admin */
+export const subscriptionExpiryReminderEmail = ({
+  superAdminName,
+  companyName,
+  planName,
+  endDate,
+  daysLeft = 3,
+}) =>
+  base(`Subscription expiring in ${daysLeft} days - ${safe(companyName, APP_NAME)}`, `
+    ${greeting(superAdminName)}
+    <p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 12px;">
+      Your company subscription is expiring soon. Please renew it to avoid service interruption.
+    </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+           style="background:#f7f8fc;border:1px solid #e2e5f1;border-radius:10px;margin:18px 0 10px;">
+      <tr>
+        <td style="padding:16px 18px;">
+          <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">Company</p>
+          <p style="margin:0 0 14px;font-size:15px;font-weight:700;color:#111827;">${safe(companyName, "-")}</p>
+          <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">Plan</p>
+          <p style="margin:0 0 14px;font-size:15px;font-weight:700;color:#111827;">${safe(planName, "-")}</p>
+          <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">Expiry date</p>
+          <p style="margin:0;font-size:15px;font-weight:700;color:#111827;">
+            ${new Date(endDate).toLocaleDateString("en-US", { dateStyle: "long" })}
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    ${alertBox(`Your subscription will expire in <strong>${daysLeft} days</strong>.`, "warning")}
+    ${ctaButton("Open BOMEGROW", `${APP_URL}/login`)}
+  `);
+
+/** Payment success confirmation -> company super admin */
+export const subscriptionPaymentSuccessEmail = ({
+  superAdminName,
+  companyName,
+  planName,
+  startDate,
+  endDate,
+  paymentId,
+  paymentProvider,
+}) =>
+  base(`Payment successful - ${safe(companyName, APP_NAME)}`, `
+    ${greeting(superAdminName)}
+    <p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 12px;">
+      Your payment has been received successfully and the subscription is now active.
+    </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+           style="background:#f7f8fc;border:1px solid #e2e5f1;border-radius:10px;margin:18px 0 10px;">
+      <tr>
+        <td style="padding:16px 18px;">
+          <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">Company</p>
+          <p style="margin:0 0 14px;font-size:15px;font-weight:700;color:#111827;">${safe(companyName, "-")}</p>
+          <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">Plan</p>
+          <p style="margin:0 0 14px;font-size:15px;font-weight:700;color:#111827;">${safe(planName, "-")}</p>
+          <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">Subscription period</p>
+          <p style="margin:0 0 14px;font-size:15px;font-weight:700;color:#111827;">
+            ${new Date(startDate).toLocaleDateString("en-US", { dateStyle: "medium" })} - ${new Date(endDate).toLocaleDateString("en-US", { dateStyle: "medium" })}
+          </p>
+          <p style="margin:0 0 8px;font-size:13px;color:#6b7280;">Payment details</p>
+          <p style="margin:0;font-size:15px;font-weight:700;color:#111827;">
+            ${safe(paymentProvider, "manual")} ${paymentId ? `(${paymentId})` : ""}
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    ${alertBox("Your company account has been activated with super admin access.", "success")}
+    ${ctaButton("Open BOMEGROW", `${APP_URL}/login`)}
   `);

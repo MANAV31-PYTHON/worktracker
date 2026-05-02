@@ -48,30 +48,38 @@ export const getMyAttendanceHistory = async (userId, limit = 14) => {
   return Attendance.find({ user: userId }).sort({ dateKey: -1 }).limit(safeLimit);
 };
 
-const ensureEmployee = async (userId) => {
-  const user = await User.findById(userId).select("name role isActive");
+const ensureEmployee = async (userId, actorUserId = null) => {
+  const user = await User.findById(userId).select("name role isActive companyId");
   if (!user) throw new Error("Employee not found");
   if (user.role !== "EMPLOYEE") throw new Error("Attendance can only be marked for employees");
   if (!user.isActive) throw new Error("Cannot mark attendance for inactive employee");
+
+  if (actorUserId) {
+    const actor = await User.findById(actorUserId).select("companyId");
+    if (!actor || !actor.companyId || !user.companyId || actor.companyId.toString() !== user.companyId.toString()) {
+      throw new Error("Not allowed for this company");
+    }
+  }
+
   return user;
 };
 
-export const clockInForEmployee = async (employeeId) => {
-  await ensureEmployee(employeeId);
+export const clockInForEmployee = async (employeeId, actorUserId) => {
+  await ensureEmployee(employeeId, actorUserId);
   return clockIn(employeeId);
 };
 
-export const clockOutForEmployee = async (employeeId) => {
-  await ensureEmployee(employeeId);
+export const clockOutForEmployee = async (employeeId, actorUserId) => {
+  await ensureEmployee(employeeId, actorUserId);
   return clockOut(employeeId);
 };
 
-export const getEmployeeTodayAttendance = async (employeeId) => {
-  await ensureEmployee(employeeId);
+export const getEmployeeTodayAttendance = async (employeeId, actorUserId) => {
+  await ensureEmployee(employeeId, actorUserId);
   return getTodayAttendance(employeeId);
 };
 
-export const getEmployeeAttendanceHistory = async (employeeId, limit = 14) => {
-  await ensureEmployee(employeeId);
+export const getEmployeeAttendanceHistory = async (employeeId, limit = 14, actorUserId) => {
+  await ensureEmployee(employeeId, actorUserId);
   return getMyAttendanceHistory(employeeId, limit);
 };

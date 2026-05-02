@@ -43,6 +43,13 @@ const taskSchema = new mongoose.Schema(
       required: true,
     },
 
+    companyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Company",
+      default: null,
+      index: true,
+    },
+
     // Overall task view — admin-controlled
     overallStatus: {
       type: String,

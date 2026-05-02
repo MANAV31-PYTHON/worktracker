@@ -15,7 +15,7 @@ export const addLog = async (req, res) => {
 
 export const getLogs = async (req, res) => {
   try {
-    const logs = await getTaskLogs(req.params.taskId);
+    const logs = await getTaskLogs(req.params.taskId, req.user);
     res.json(logs);
   } catch (err) {
     res.status(400).json({ message: err.message });

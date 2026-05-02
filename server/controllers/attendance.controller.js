@@ -47,7 +47,7 @@ export const myAttendanceHistory = async (req, res) => {
 
 export const markEmployeeClockIn = async (req, res) => {
   try {
-    const record = await clockInForEmployee(req.params.userId);
+    const record = await clockInForEmployee(req.params.userId, req.user.id);
     res.status(201).json(record);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -56,7 +56,7 @@ export const markEmployeeClockIn = async (req, res) => {
 
 export const markEmployeeClockOut = async (req, res) => {
   try {
-    const record = await clockOutForEmployee(req.params.userId);
+    const record = await clockOutForEmployee(req.params.userId, req.user.id);
     res.json(record);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -65,7 +65,7 @@ export const markEmployeeClockOut = async (req, res) => {
 
 export const employeeTodayAttendance = async (req, res) => {
   try {
-    const record = await getEmployeeTodayAttendance(req.params.userId);
+    const record = await getEmployeeTodayAttendance(req.params.userId, req.user.id);
     res.json(record);
   } catch (err) {
     res.status(400).json({ message: err.message });
@@ -74,7 +74,7 @@ export const employeeTodayAttendance = async (req, res) => {
 
 export const employeeAttendanceHistory = async (req, res) => {
   try {
-    const records = await getEmployeeAttendanceHistory(req.params.userId, req.query.limit);
+    const records = await getEmployeeAttendanceHistory(req.params.userId, req.query.limit, req.user.id);
     res.json(records);
   } catch (err) {
     res.status(400).json({ message: err.message });

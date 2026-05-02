@@ -2,6 +2,11 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import User from "../models/user.model.js";
 
+const isPlatformOwnerEmail = (email = "") => {
+  const ownerEmail = (process.env.SUPER_ADMIN_EMAIL || "").trim().toLowerCase();
+  return Boolean(ownerEmail) && email.trim().toLowerCase() === ownerEmail;
+};
+
 export const registerUser = async (data) => {
   const { name, email, password } = data;
 
@@ -56,5 +61,25 @@ export const loginUser = async (data) => {
   // ❌ remove password before sending response
   user.password = undefined;
 
-  return { user, token };
+  const userObj = user.toObject ? user.toObject() : user;
+  return {
+    user: {
+      ...userObj,
+      isPlatformOwner: isPlatformOwnerEmail(userObj.email || ""),
+    },
+    token,
+  };
+};
+
+export const getCurrentUser = async (userId) => {
+  if (!userId) throw new Error("User id is required");
+
+  const user = await User.findById(userId).select("-password");
+  if (!user) throw new Error("User not found");
+
+  const userObj = user.toObject ? user.toObject() : user;
+  return {
+    ...userObj,
+    isPlatformOwner: isPlatformOwnerEmail(userObj.email || ""),
+  };
 };

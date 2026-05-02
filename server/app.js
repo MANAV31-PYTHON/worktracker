@@ -10,6 +10,7 @@ import departmentRoutes from "./routes/department.routes.js";
 import personalTaskRoutes from "./routes/personalTask.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
 import attendanceRoutes from "./routes/attendance.routes.js";
+import subscriptionRoutes from "./routes/subscription.routes.js";
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.use("/api/departments", departmentRoutes);
 app.use("/api/personal-tasks", personalTaskRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/attendance", attendanceRoutes);
+app.use("/api/subscriptions", subscriptionRoutes);
 
 // app.get("/", (req, res) => res.send("WorkTrack API is running..."));
 

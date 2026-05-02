@@ -4,7 +4,7 @@ import { useNotifications } from "../context/NotificationContext";
 import { useState } from "react";
 import {
   LayoutDashboard, ClipboardList, Users, Building2,
-  Bell, LogOut, Menu, ChevronRight, Zap, Clock3,
+  Bell, LogOut, Menu, ChevronRight, Zap, Clock3, Shield,
 } from "lucide-react";
 
 const NAV = [
@@ -14,11 +14,13 @@ const NAV = [
   { path:"/departments",   label:"Departments",    Icon:Building2,       roles:["SUPER_ADMIN","ADMIN"] },
   { path:"/notifications", label:"Notifications",  Icon:Bell,            roles:["SUPER_ADMIN","ADMIN","EMPLOYEE"] },
   { path:"/attendance",    label:"Attendance",     Icon:Clock3,          roles:["SUPER_ADMIN","ADMIN","EMPLOYEE"] },
+  { path:"/admin-panel",   label:"Admin Panel",    Icon:Shield,          roles:["SUPER_ADMIN"] },
 ];
 
 const PAGE_TITLES = {
   "/dashboard":"/Dashboard", "/tasks":"/Tasks", "/users":"/Users",
   "/departments":"/Departments", "/notifications":"/Notifications", "/attendance":"/Attendance",
+  "/admin-panel":"/Admin Panel",
 };
 
 const ROLE_COLORS = {
@@ -38,7 +40,11 @@ export default function AppLayout() {
   const role      = user?.role ?? "";
   const roleLabel = role.replace(/_/g, " ");
   const roleStyle = ROLE_COLORS[role] || ROLE_COLORS.EMPLOYEE;
-  const visibleNav = NAV.filter(n => n.roles.includes(role));
+  const visibleNav = NAV.filter((n) => {
+    if (!n.roles.includes(role)) return false;
+    if (n.path === "/admin-panel") return Boolean(user?.isPlatformOwner);
+    return true;
+  });
   const crumb     = PAGE_TITLES[location.pathname] || "";
 
   return (

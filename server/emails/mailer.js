@@ -15,6 +15,9 @@ import {
   taskDeletedAdminEmail,
   passwordResetEmail,
   passwordChangedEmail,
+  employeeWelcomeEmail,
+  subscriptionExpiryReminderEmail,
+  subscriptionPaymentSuccessEmail,
 } from "./templates.js";
 
 const clean = (val) => (val || "").replace(/^["']|["']$/g, "").trim();
@@ -67,6 +70,25 @@ export const sendPasswordChangedEmail = (user) =>
     to: user.email,
     subject: "Your BOMEGROW password was changed",
     html: passwordChangedEmail({ name: user.name }),
+  });
+
+export const sendEmployeeWelcomeCredentialsEmail = ({
+  employee,
+  createdByName,
+  temporaryPassword,
+  resetURL,
+}) =>
+  send({
+    to: employee.email,
+    subject: "Welcome to BOMEGROW - Login details",
+    html: employeeWelcomeEmail({
+      employeeName: employee.name,
+      createdByName,
+      loginEmail: employee.email,
+      temporaryPassword,
+      loginUrl: `${process.env.APP_URL || "http://localhost:3000"}/login`,
+      resetURL,
+    }),
   });
 
 export const sendTaskAssignedToEmployee = (employee, assignedByName, task) =>
@@ -134,4 +156,46 @@ export const sendTaskDeletedToAdmin = (admin, taskTitle, employeeName) =>
     to: admin.email,
     subject: `Task removed: "${taskTitle}"`,
     html: taskDeletedAdminEmail({ adminName: admin.name, taskTitle, employeeName }),
+  });
+
+export const sendSubscriptionExpiryReminderToSuperAdmin = ({
+  superAdmin,
+  companyName,
+  planName,
+  endDate,
+  daysLeft = 3,
+}) =>
+  send({
+    to: superAdmin?.email,
+    subject: `[BOMEGROW] Subscription expires in ${daysLeft} days`,
+    html: subscriptionExpiryReminderEmail({
+      superAdminName: superAdmin?.name,
+      companyName,
+      planName,
+      endDate,
+      daysLeft,
+    }),
+  });
+
+export const sendSubscriptionPaymentSuccessToSuperAdmin = ({
+  superAdmin,
+  companyName,
+  planName,
+  startDate,
+  endDate,
+  paymentId,
+  paymentProvider,
+}) =>
+  send({
+    to: superAdmin?.email,
+    subject: `[BOMEGROW] Payment successful for ${companyName}`,
+    html: subscriptionPaymentSuccessEmail({
+      superAdminName: superAdmin?.name,
+      companyName,
+      planName,
+      startDate,
+      endDate,
+      paymentId,
+      paymentProvider,
+    }),
   });

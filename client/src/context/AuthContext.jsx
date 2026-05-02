@@ -12,12 +12,37 @@ export const AuthProvider = ({ children }) => {
     }
   });
   const [token, setToken] = useState(() => localStorage.getItem("token") || null);
+  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
   // Keep a ref to current user so the socket handler always has fresh data
   const userRef = useRef(user);
   useEffect(() => {
     userRef.current = user;
   }, [user]);
+
+  useEffect(() => {
+    const syncCurrentUser = async () => {
+      if (!token) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!res.ok) return;
+
+        const data = await res.json();
+        if (data?.user) {
+          localStorage.setItem("user", JSON.stringify(data.user));
+          setUser(data.user);
+        }
+      } catch (err) {
+        console.error("Failed to sync current user", err);
+      }
+    };
+
+    syncCurrentUser();
+  }, [API_BASE, token]);
 
   useEffect(() => {
     if (!user || !token) {
